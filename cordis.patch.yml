@@ -1,0 +1,10 @@
+- insert:
+    - id: tortoisegit-ai
+      name: '@local/tortoisegit-ai'
+      config:
+        enabled: true
+        allowedRoots:
+          - 'H:\TortoiseGitAI'
+        tgitPath: 'D:\TortoiseGit\bin\TortoiseGitProc.exe'
+        summaryTimeoutMs: 15000
+        gitTimeoutMs: 30000
