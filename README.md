@@ -1,4 +1,4 @@
-﻿# TortoiseGit AI（小乌龟 AI 版本记录）
+# TortoiseGit AI（小乌龟 AI 版本记录）
 
 DeepSeek Harness 插件：AI 每完成一轮修改，自动把**本轮改动**提交到当前分支，提交标题是 AI 写的一句中文概括；查看历史、对比、日志等都直接打开已安装的 TortoiseGit 窗口。
 
@@ -13,6 +13,8 @@ DeepSeek Harness 插件：AI 每完成一轮修改，自动把**本轮改动**�
   - 以下情况也会跳过：分离 HEAD、正在 merge/rebase、本轮期间 HEAD 或暂存区被别人改动、同一仓库还有其他 agent 正在运行。
   - 不执行 reset、stash 或 push，也不跳过 git hooks。
   - 提交范围：只包含本轮期间发生变化的文件（整文件），不是整个文件夹。以下文件永远不会被自动提交：`.gitignore` 里忽略的；内置编译产物清单（`Objects/`、`Listings/`、`DebugConfig/`、`*.o *.obj *.d *.crf *.axf *.elf *.hex *.lst *.map *.lnp *.dep`、`*.uvguix.*`、`*.uvoptx`、`JLinkLog.txt`、`node_modules/`、`build/`、`dist/` 等）；配置 `excludes` 追加的；`.env`/私钥等敏感文件。编译产物的变化也不会让工作区算作"不干净"。
+  - 工具链自动识别（启用仓库时和之后每 10 分钟，扫描根目录及两层子目录）：ESP-IDF、PlatformIO、Arduino、Keil、IAR、STM32CubeIDE/Eclipse、CMake、Zephyr、VS Code、Visual Studio/.NET、Qt、Python、Node.js、Rust、Java、KiCad，并追加对应的产物规则（如 `managed_components/`、`.pio/`、`.vscode/ipch/`、`cmake-build-*/`）。
+  - AI 判定：本轮新出现、规则未覆盖的文件交给生成标题的同一次模型调用判断；模型判为产物的只从本次提交中剔除，并记成本仓库规则（整个新目录或精确路径）。已跟踪文件的修改永远不会被剔除。面板里可以查看这些规则，点 × 恢复提交。
   - 撤销只用 `git revert`，并且需要确认。
 - **界面**：输入框下方状态栏里的小标签（绿点 + 最新提交号；未启用的仓库显示"未启用"，非 git 目录不显示）。点开弹出面板：按仓库启用/停用、本会话开关、日志/工作区/版本图（打开 TortoiseGit）、本会话 AI 提交列表（对比、撤销，撤销需二次确认）。
 - **AI 工具** `tgit_ai`：可执行 `status`、`log`、`diff`、`open`、`pause`、`resume`、`undo`（撤销需传 `confirm:true`，并且只应在用户明确要求时调用）。

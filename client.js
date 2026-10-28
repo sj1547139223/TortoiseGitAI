@@ -4,8 +4,8 @@ window.__ModuleLoader__.load({
     const React = require('react');
     const h = React.createElement;
     const NS = 'tortoisegit-ai';
-    const zh = { title: '小乌龟 AI 版本记录', notEnabled: '未启用', enableRepo: '在此仓库启用自动提交', disableRepo: '在此仓库停用', enableHint: '启用后，AI 每轮修改结束会自动提交到当前分支（只提交 AI 本轮的改动；轮次开始时有未提交修改则跳过）。', sessionOn: '本会话自动提交：开', sessionOff: '本会话自动提交：关', refresh: '刷新', log: '日志', compare: '对比', status: '工作区', graph: '版本图', undo: '撤销', cancel: '取消', confirm: '确认撤销', warning: '将创建一个新的 revert 提交，原有历史保留。', empty: '本会话暂无 AI 提交。', failed: '操作失败', latest: '最近结果', history: '本会话 AI 提交', native: '打开 TortoiseGit 原生窗口', committed: '已提交', skipped: '已跳过', error: '出错', reverted: '已撤销', conflict: '撤销冲突', close: '关闭' };
-    const en = { title: 'TortoiseGit AI history', notEnabled: 'Off', enableRepo: 'Enable auto-commit for this repository', disableRepo: 'Disable for this repository', enableHint: 'When enabled, each AI turn that edits files is committed to the current branch (only the AI\'s own changes; turns that start with uncommitted changes are skipped).', sessionOn: 'Session auto-commit: on', sessionOff: 'Session auto-commit: off', refresh: 'Refresh', log: 'Log', compare: 'Compare', status: 'Working tree', graph: 'Graph', undo: 'Revert', cancel: 'Cancel', confirm: 'Confirm revert', warning: 'Creates a new revert commit; history is kept.', empty: 'No AI commits in this session yet.', failed: 'Operation failed', latest: 'Latest', history: 'AI commits in this session', native: 'Opens a native TortoiseGit window', committed: 'Committed', skipped: 'Skipped', error: 'Error', reverted: 'Reverted', conflict: 'Revert conflict', close: 'Close' };
+    const zh = { title: '小乌龟 AI 版本记录', notEnabled: '未启用', enableRepo: '在此仓库启用自动提交', disableRepo: '在此仓库停用', enableHint: '启用后，AI 每轮修改结束会自动提交到当前分支（只提交 AI 本轮的改动；轮次开始时有未提交修改则跳过）。', sessionOn: '本会话自动提交：开', sessionOff: '本会话自动提交：关', refresh: '刷新', log: '日志', compare: '对比', status: '工作区', graph: '版本图', undo: '撤销', cancel: '取消', confirm: '确认撤销', warning: '将创建一个新的 revert 提交，原有历史保留。', empty: '本会话暂无 AI 提交。', failed: '操作失败', latest: '最近结果', history: '本会话 AI 提交', native: '打开 TortoiseGit 原生窗口', committed: '已提交', skipped: '已跳过', error: '出错', reverted: '已撤销', conflict: '撤销冲突', close: '关闭', rules: '不自动提交的文件', detected: '识别到的工程', none: '未识别到特定工具链（使用内置清单 + .gitignore）', learned: 'AI 判定的产物', forget: '恢复提交', redetect: '重新识别', patterns: '条规则', omitted: '已排除产物' };
+    const en = { title: 'TortoiseGit AI history', notEnabled: 'Off', enableRepo: 'Enable auto-commit for this repository', disableRepo: 'Disable for this repository', enableHint: 'When enabled, each AI turn that edits files is committed to the current branch (only the AI\'s own changes; turns that start with uncommitted changes are skipped).', sessionOn: 'Session auto-commit: on', sessionOff: 'Session auto-commit: off', refresh: 'Refresh', log: 'Log', compare: 'Compare', status: 'Working tree', graph: 'Graph', undo: 'Revert', cancel: 'Cancel', confirm: 'Confirm revert', warning: 'Creates a new revert commit; history is kept.', empty: 'No AI commits in this session yet.', failed: 'Operation failed', latest: 'Latest', history: 'AI commits in this session', native: 'Opens a native TortoiseGit window', committed: 'Committed', skipped: 'Skipped', error: 'Error', reverted: 'Reverted', conflict: 'Revert conflict', close: 'Close', rules: 'Never auto-committed', detected: 'Detected projects', none: 'No specific toolchain detected (built-in list + .gitignore)', learned: 'Judged artifacts (AI)', forget: 'Commit again', redetect: 'Re-detect', patterns: 'rules', omitted: 'Artifacts excluded' };
     const css = `.tgai-wrap{position:relative;display:inline-flex}
 .tgai-pill{display:inline-flex;align-items:center;gap:5px;font:inherit;font-size:12px;line-height:20px;color:var(--dsw-alias-label-secondary);background:transparent;border:0;border-radius:6px;padding:2px 6px;cursor:pointer;white-space:nowrap}
 .tgai-pill:hover,.tgai-pill[aria-expanded=true]{background:var(--dsw-alias-bg-layer-2);color:var(--dsw-alias-label-primary)}
@@ -27,6 +27,9 @@ window.__ModuleLoader__.load({
 .tgai-entry{border-top:1px solid var(--dsw-alias-border-l1);padding:6px 0}
 .tgai-pop code{font-family:var(--dsw-alias-font-mono,monospace)}
 .tgai-section{margin-top:8px;font-weight:600}
+.tgai-chip{display:inline-flex;align-items:center;gap:2px;padding:0 6px;border-radius:10px;background:var(--dsw-alias-bg-layer-2);font-family:var(--dsw-alias-font-mono,monospace);font-size:11px}
+.tgai-pop .tgai-chip button{border:0;background:transparent;padding:0 2px;font-size:11px}
+.tgai-pop details summary{cursor:pointer;color:var(--dsw-alias-label-secondary)}
 .tgai-confirm{padding:6px 8px;margin-top:4px;background:var(--dsw-alias-bg-layer-2);border-radius:6px}`;
     const api = async (path, init) => {
       const response = await fetch(path, { credentials: 'same-origin', cache: 'no-store', ...init });
@@ -102,6 +105,14 @@ window.__ModuleLoader__.load({
               nativeBtn(t('graph'), { action: 'open', command: 'revisiongraph' }),
               h('button', { type: 'button', disabled: busy, onClick: refresh }, t('refresh'))),
             latest ? h('p', null, h('small', null, `${t('latest')}: ${latestText}`)) : null,
+            latest?.omitted?.length ? h('p', null, h('small', null, `${t('omitted')}: ${latest.omitted.slice(0, 6).join(', ')}${latest.omitted.length > 6 ? ' …' : ''}`)) : null,
+            data.authorized && data.rules ? h(React.Fragment, null,
+              h('div', { className: 'tgai-section' }, t('rules')),
+              h('p', null, h('small', null, data.rules.profiles.length ? `${t('detected')}: ${[...new Set(data.rules.profiles.map(p => p.dir ? `${p.label} (${p.dir})` : p.label))].join(', ')}` : t('none'))),
+              data.rules.detected.length ? h('details', null, h('summary', null, `${data.rules.detected.length} ${t('patterns')}`), h('div', { className: 'tgai-row' }, data.rules.detected.map(p => h('span', { className: 'tgai-chip', key: p }, p)))) : null,
+              data.rules.learned.length ? h(React.Fragment, null, h('p', null, h('small', null, t('learned'))),
+                h('div', { className: 'tgai-row' }, data.rules.learned.map(p => h('span', { className: 'tgai-chip', key: p }, p, h('button', { type: 'button', title: t('forget'), 'aria-label': `${t('forget')} ${p}`, disabled: busy, onClick: () => act({ action: 'forgetExclude', pattern: p }) }, '×'))))) : null,
+              h('div', { className: 'tgai-row', style: { marginTop: 4 } }, btn(t('redetect'), { action: 'redetect' }))) : null,
             error ? h('p', { className: 'tgai-error', role: 'alert' }, error) : null,
             data.authorized ? h(React.Fragment, null,
               h('div', { className: 'tgai-section' }, `${t('history')} (${commits.length})`),

@@ -18,7 +18,8 @@ async function repo(t) {
 function fakeLlm(text, seen = []) {
   return { async prepareCall(route, signal) { seen.push(route); return { config: { ...route }, async *stream(o) { seen.push(o); yield { type: 'text-delta', index: 0, text }; yield { type: 'finish', reason: { kind: 'stop' } }; } }; } };
 }
-function harness(cwd, { roots = [cwd], llm = fakeLlm('更新问候语'), others = [] } = {}) {
+function harness(cwd, { roots = [cwd], llm = fakeLlm('更新问候语'), others = [], store = new Map(), reload = false } = {}) {
+  if (!reload) delete globalThis[Symbol.for('tortoisegit-ai.runtime')]; // fresh process unless simulating a hot reload
   const listeners = {}, routes = {}, tools = {}, effects = [];
   const agent = { id: 'sess-1', session: { requestHeader: () => ({ config: { provider: 'p', model: 'm' } }) } };
   const ctx = {
@@ -30,7 +31,7 @@ function harness(cwd, { roots = [cwd], llm = fakeLlm('更新问候语'), others 
     llm,
     webServer: { register: r => { routes[r.path] = r.handler; return () => {}; } },
     connection: { requestRejection: () => undefined },
-    storageDomain: { open: async spec => { assert.match(spec.name, /^[a-z][a-z0-9_]*$/); const m = new Map(); return { table: () => ({ get: k => m.get(k), put: async (k, v) => { spec.tables.repos.valueSchema.parse(v); m.set(k, v); } }), close: async () => {} }; } },
+    storageDomain: { open: async spec => { assert.match(spec.name, /^[a-z][a-z0-9_]*$/); const m = store; return { table: () => ({ get: k => m.get(k), put: async (k, v) => { spec.tables.repos.valueSchema.parse(v); m.set(k, v); } }), close: async () => {} }; } },
   };
   apply(ctx, { allowedRoots: roots, tgitPath: 'C:\\nope\\TortoiseGitProc.exe' });
   const emit = async (name, payload) => { for (const fn of listeners[name] || []) await fn({ agent, ...payload }, async () => ({ kind: 'enter' })); };
@@ -148,4 +149,84 @@ test('custom excludes and a staged artifact still count as user work', async t =
   await fs.writeFile(path.join(cwd, 'x.o'), 'o'); git(cwd, 'add', '-f', 'x.o');
   await turn(h, 1, () => fs.writeFile(path.join(cwd, 'a.txt'), 'two\n'));
   assert.equal(git(cwd, 'rev-list', '--count', 'HEAD'), '1');
+});
+
+const postTo = (h, payload) => new Promise(resolve => {
+  const body = Buffer.from(JSON.stringify({ session: 'sess-1', ...payload }));
+  const res = { headers: {}, setHeader(k, v) { this.headers[k] = v; }, end(b) { resolve(b && JSON.parse(b)); } };
+  h.routes['/api/tortoisegit-ai.action']({ method: 'POST', headers: { 'content-type': 'application/json' }, [Symbol.asyncIterator]: async function* () { yield body; } }, res);
+});
+
+test('toolchains are detected (ESP-IDF, PlatformIO, nested) and their outputs ignored', async t => {
+  const { detectProfiles } = await import('../lib/detect.js');
+  const cwd = await repo(t);
+  await fs.writeFile(path.join(cwd, 'CMakeLists.txt'), 'include($ENV{IDF_PATH}/tools/cmake/project.cmake)\nproject(app)\n');
+  await fs.writeFile(path.join(cwd, 'sdkconfig'), 'CONFIG_X=y\n');
+  await fs.mkdir(path.join(cwd, 'tools', 'pio'), { recursive: true }); await fs.writeFile(path.join(cwd, 'tools', 'pio', 'platformio.ini'), '[env]\n');
+  await fs.mkdir(path.join(cwd, '.vscode')); await fs.writeFile(path.join(cwd, '.vscode', 'settings.json'), '{}');
+  git(cwd, 'add', '.'); git(cwd, 'commit', '-q', '-m', 'proj');
+  const found = await detectProfiles(cwd);
+  const ids = found.profiles.map(p => p.id);
+  for (const id of ['esp-idf', 'cmake', 'platformio', 'vscode']) assert.ok(ids.includes(id), id);
+  assert.ok(found.patterns.includes('managed_components/')); assert.ok(found.patterns.includes('.pio/'));
+  const h = harness(cwd, { roots: [] });
+  assert.equal((await postTo(h, { action: 'enableRepo' })).profiles.some(p => p.id === 'esp-idf'), true);
+  await fs.mkdir(path.join(cwd, 'managed_components', 'espressif__led'), { recursive: true });
+  await fs.writeFile(path.join(cwd, 'managed_components', 'espressif__led', 'led.c'), 'int x;');
+  await fs.writeFile(path.join(cwd, 'sdkconfig.old'), 'old');                       // left over before the turn
+  await turn(h, 1, async () => {
+    await fs.writeFile(path.join(cwd, 'a.txt'), 'two\n');
+    await fs.mkdir(path.join(cwd, 'tools', 'pio', '.pio', 'build'), { recursive: true }); await fs.writeFile(path.join(cwd, 'tools', 'pio', '.pio', 'build', 'fw.bin'), 'bin');
+    await fs.writeFile(path.join(cwd, '.vscode', 'c_cpp_properties.json'), '{}');
+  });
+  assert.deepEqual(git(cwd, 'show', '--name-only', '--format=', 'HEAD').split(/\r?\n/), ['a.txt']);
+  const status = await postTo(h, { action: 'status' });
+  assert.ok(status.rules.profiles.length >= 4);
+});
+
+test('the model judges unknown new artifacts; they are omitted, learned, and forgettable', async t => {
+  const cwd = await repo(t);
+  await fs.mkdir(path.join(cwd, 'src')); await fs.writeFile(path.join(cwd, 'src', 'keep.c'), 'int k;'); git(cwd, 'add', '.'); git(cwd, 'commit', '-q', '-m', 'src');
+  const reply = JSON.stringify({ title: '新增驱动并编译', generated: ['out_fw/app.img', 'out_fw/app.sym', 'src/drv.c', 'a.txt', 'not/listed.x'] });
+  const store = new Map(), h = harness(cwd, { llm: fakeLlm(`结果：${reply}`), store });
+  await turn(h, 1, async () => {
+    await fs.writeFile(path.join(cwd, 'a.txt'), 'two\n');                    // tracked: may never be omitted
+    await fs.writeFile(path.join(cwd, 'src', 'drv.c'), 'int d;');             // new, flagged, dir has tracked files
+    await fs.mkdir(path.join(cwd, 'out_fw')); await fs.writeFile(path.join(cwd, 'out_fw', 'app.img'), 'x'); await fs.writeFile(path.join(cwd, 'out_fw', 'app.sym'), 'y');
+  });
+  assert.match(git(cwd, 'log', '-1', '--format=%s'), /^AI: 新增驱动并编译/);
+  assert.deepEqual(git(cwd, 'show', '--name-only', '--format=', 'HEAD').split(/\r?\n/).sort(), ['a.txt']);
+  const status = await postTo(h, { action: 'status' });
+  assert.deepEqual(status.rules.learned.sort(), ['/out_fw/', '/src/drv.c']);
+  assert.deepEqual(status.outcomes[0].omitted.sort(), ['out_fw/app.img', 'out_fw/app.sym', 'src/drv.c']);
+  // Next turn: learned artifacts do not dirty the baseline; the model now sees no candidates.
+  const h2seen = [];
+  const h2 = harness(cwd, { llm: fakeLlm('再改一次', h2seen), store, reload: true });
+  await turn(h2, 2, () => fs.writeFile(path.join(cwd, 'a.txt'), 'three\n'));
+  assert.equal(git(cwd, 'rev-list', '--count', 'HEAD'), '4');
+  assert.doesNotMatch(h2seen[1].messages[0].content[0].text, /candidates/);
+  // Forgetting a rule makes drv.c count as user work again (dirty baseline -> skip).
+  await postTo(h2, { action: 'forgetExclude', pattern: '/src/drv.c' });
+  await turn(h2, 3, () => fs.writeFile(path.join(cwd, 'a.txt'), 'four\n'));
+  assert.equal(git(cwd, 'rev-list', '--count', 'HEAD'), '4');
+  await assert.rejects(h2.tools.tgit_ai.execute({ action: 'forgetExclude', pattern: '/out_fw/' }, { agent: h2.agent }), /only the user/);
+});
+
+test('a hot reload during a turn keeps the baseline and still commits', async t => {
+  const cwd = await repo(t), store = new Map();
+  const first = harness(cwd, { store }), signal = new AbortController().signal;
+  await first.emit('agent/status', { status: 'running' });
+  await first.emit('agent/pre-step', { turn: 1, step: 0, messages: [], signal });
+  await fs.writeFile(path.join(cwd, 'a.txt'), 'two\n');
+  const second = harness(cwd, { store, reload: true });                                     // plugin re-applied with new code
+  await second.emit('agent/pre-step', { turn: 1, step: 1, messages: [], signal });
+  await second.emit('agent/turn-stopping', { turn: 1, signal });
+  assert.equal(git(cwd, 'rev-list', '--count', 'HEAD'), '2');
+});
+
+test('judge replies are parsed defensively', async () => {
+  const { parseJudge } = await import('../lib/summary.js');
+  assert.deepEqual(parseJudge('```json\n{"title":"修复","generated":["a.o","x"]}\n```', ['a.o']), { title: '修复', generated: ['a.o'] });
+  assert.deepEqual(parseJudge('修复串口', ['a.o']), { title: '修复串口', generated: [] });
+  assert.deepEqual(parseJudge('{bad json', ['a.o']).generated, []);
 });

@@ -4,6 +4,7 @@ import path from 'node:path';
 import { createHash } from 'node:crypto';
 import { GitService } from './lib/git.js';
 import { generateSummary } from './lib/summary.js';
+import { detectProfiles } from './lib/detect.js';
 import { locateTortoiseGit, openTortoiseGit } from './lib/tgit.js';
 
 /**
@@ -26,7 +27,8 @@ export const Config = z.object({
   defaultExcludes: z.boolean().default(true),
 });
 const Request = z.object({
-  action: z.enum(['status', 'log', 'diff', 'open', 'pause', 'resume', 'undo', 'enableRepo', 'disableRepo']),
+  action: z.enum(['status', 'log', 'diff', 'open', 'pause', 'resume', 'undo', 'enableRepo', 'disableRepo', 'forgetExclude', 'redetect']),
+  pattern: z.string().max(500).optional(),
   command: z.enum(['log', 'showcompare', 'repostatus', 'diff', 'blame', 'revisiongraph']).optional(),
   sha: z.string().regex(/^[a-f0-9]{7,64}$/i).optional(),
   path: z.string().max(2000).optional(),
@@ -34,8 +36,16 @@ const Request = z.object({
   confirm: z.boolean().optional(),
 }).strict();
 /** Persistent per-repository opt-in (key = canonical repository root). */
-const REPOS_DOMAIN = { name: 'tortoisegit_ai', version: 1, tables: { repos: { valueSchema: z.object({ enabled: z.boolean(), path: z.string(), updatedAt: z.number() }) } } };
-const UI_ONLY = new Set(['enableRepo', 'disableRepo']);
+const RepoRecord = z.object({
+  enabled: z.boolean(), path: z.string(), updatedAt: z.number(),
+  profiles: z.array(z.object({ id: z.string(), label: z.string(), dir: z.string() })).optional(), // detected toolchains
+  detected: z.array(z.string()).optional(), // patterns from detected toolchains
+  learned: z.array(z.string()).optional(), // patterns the model judged to be artifacts
+  detectedAt: z.number().optional(),
+});
+const REPOS_DOMAIN = { name: 'tortoisegit_ai', version: 1, tables: { repos: { valueSchema: RepoRecord } } };
+const UI_ONLY = new Set(['enableRepo', 'disableRepo', 'forgetExclude', 'redetect']);
+const DETECT_TTL_MS = 10 * 60 * 1000;
 const ROUTE_STATUS = '/api/tortoisegit-ai.status';
 const ROUTE_ACTION = '/api/tortoisegit-ai.action';
 const keyOf = value => process.platform === 'win32' ? value.toLowerCase() : value;
@@ -47,9 +57,11 @@ export function apply(ctx, rawConfig) {
   const config = Config.parse(rawConfig || {});
   const shutdown = new AbortController();
   const git = new GitService({ timeoutMs: config.gitTimeoutMs, signal: shutdown.signal, excludes: config.excludes, defaultExcludes: config.defaultExcludes });
-  /** Per-session state: preference, baseline of the current editing interval, outcomes. */
-  const states = new Map();
-  const running = new Map(); // agent id -> canonical cwd key while that agent runs
+  /** Per-session state: preference, baseline of the current editing interval, outcomes.
+   * Kept on globalThis so a plugin hot reload during a turn does not lose the baseline. */
+  const shared = globalThis[Symbol.for('tortoisegit-ai.runtime')] ||= { states: new Map(), running: new Map(), epochs: new Map() };
+  const states = shared.states;
+  const running = shared.running; // agent id -> canonical cwd key while that agent runs
   const pending = new Set();
   let discovery;
   const domain = ctx.storageDomain.open(REPOS_DOMAIN);
@@ -57,6 +69,37 @@ export function apply(ctx, rawConfig) {
   const table = async () => (await domain).table('repos');
   const idOf = key => createHash('sha256').update(key).digest('hex').slice(0, 32); // storage-safe key
   const repoTable = async () => { const t = await table(); return { get: key => t.get(idOf(key)), put: (key, value) => t.put(idOf(key), value) }; };
+  const applyExcludes = (root, rec) => git.setRepoExcludes(root, [...(rec?.detected || []), ...(rec?.learned || [])]);
+  /** Detect toolchains for an enabled repo (cached), persist, and install its exclusion patterns. */
+  async function refreshRepo(repo, { force = false } = {}) {
+    const t = await repoTable();
+    let rec = t.get(repo.key);
+    if (!rec && repo.authorized) rec = { enabled: true, path: repo.cwd, updatedAt: Date.now() }; // enabled via allowedRoots
+    if (!rec?.enabled) return rec;
+    if (force || !rec.detectedAt || Date.now() - rec.detectedAt > DETECT_TTL_MS) {
+      const found = await detectProfiles(repo.cwd);
+      rec = { ...rec, profiles: found.profiles, detected: found.patterns, detectedAt: Date.now() };
+      await t.put(repo.key, rec);
+    }
+    applyExcludes(repo.cwd, rec);
+    return rec;
+  }
+  /** Turn model-flagged new files into durable patterns: a whole new directory when
+   * every new file in it was flagged and it holds no tracked file, else the exact path. */
+  async function learn(cwd, key, generated, created) {
+    if (!generated.length) return [];
+    const flagged = new Set(generated), patterns = new Set();
+    for (const file of generated) {
+      const dir = path.posix.dirname(file);
+      if (dir !== '.' && created.filter(f => f.startsWith(`${dir}/`)).every(f => flagged.has(f)) && !(await git.hasTracked(cwd, dir))) patterns.add(`/${dir}/`);
+      else patterns.add(`/${file}`);
+    }
+    const t = await repoTable(), rec = t.get(key) || { enabled: true, path: cwd, updatedAt: Date.now() };
+    const learned = [...new Set([...(rec.learned || []), ...patterns])].slice(-500);
+    const next = { ...rec, learned, updatedAt: Date.now() };
+    await t.put(key, next); applyExcludes(cwd, next);
+    return [...patterns];
+  }
   const executable = () => discovery ||= locateTortoiseGit(config.tgitPath);
   const stateOf = id => { let s = states.get(id); if (!s) states.set(id, s = { enabled: config.enabled, baseline: null, request: '', outcomes: [] }); return s; };
   const record = (id, value) => {
@@ -92,6 +135,7 @@ export function apply(ctx, rawConfig) {
     const repo = await repoOf(agent, payload.signal);
     if (repo.key) running.set(agent.id, repo.key);
     if (!repo.cwd || !repo.authorized) return; // not a repo / not enabled: silently out of scope
+    try { await refreshRepo(repo); } catch (e) { record(agent.id, { status: 'warning', reason: `detect_failed: ${message(e)}` }); }
     const baseline = await git.baseline(repo.cwd);
     if (baseline.status !== 'ready') { record(agent.id, { status: 'skipped', reason: baseline.dirty?.length ? `${baseline.reason}: ${baseline.dirty.slice(0, 5).join(', ')}${baseline.dirty.length > 5 ? ' …' : ''}` : baseline.reason, turn: payload.turn }); s.baseline = { skipped: true }; return; }
     s.baseline = baseline; s.request = textOf(payload.messages);
@@ -108,9 +152,13 @@ export function apply(ctx, rawConfig) {
       const prepared = await git.prepare(baseline);
       if (prepared.status !== 'ready') return record(agent.id, { ...prepared, turn });
       const route = agent.session?.requestHeader?.()?.config;
-      const summary = await generateSummary({ llm: ctx.llm, route, sessionId: agent.id, request: s.request, diff: prepared.diff, paths: prepared.paths, timeoutMs: config.summaryTimeoutMs, signal: AbortSignal.any([signal, shutdown.signal]) });
-      const result = await git.commit(prepared, summary.message, { sessionId: agent.id, turn, model: route?.model, signal: AbortSignal.any([signal, shutdown.signal]) });
-      record(agent.id, { ...result, turn, summary: summary.message, summarySource: summary.source, summaryFallbackReason: summary.reason });
+      const candidates = (prepared.created || []).slice(0, 200);
+      const summary = await generateSummary({ llm: ctx.llm, route, sessionId: agent.id, request: s.request, diff: prepared.diff, paths: prepared.paths, candidates, timeoutMs: config.summaryTimeoutMs, signal: AbortSignal.any([signal, shutdown.signal]) });
+      const omit = summary.generated || [];
+      const result = await git.commit(prepared, summary.message, { sessionId: agent.id, turn, model: route?.model, omit, signal: AbortSignal.any([signal, shutdown.signal]) });
+      // Learn only after the commit: changing patterns earlier would invalidate the prepared snapshot.
+      const learned = result.status === 'committed' || result.reason === 'excluded_only' ? await learn(baseline.cwd, key, omit, prepared.created || []).catch(() => []) : [];
+      record(agent.id, { ...result, turn, summary: summary.message, summarySource: summary.source, summaryFallbackReason: summary.reason, learned });
     } catch (error) { record(agent.id, { status: 'error', reason: message(error), turn }); }
   }
 
@@ -127,12 +175,28 @@ export function apply(ctx, rawConfig) {
     if (args.action === 'enableRepo' || args.action === 'disableRepo') {
       if (!repo.cwd) return repo.status;
       const enabled = args.action === 'enableRepo';
-      await (await repoTable()).put(repo.key, { enabled, path: repo.cwd, updatedAt: Date.now() });
-      if (!enabled) s.baseline = null;
-      return { ok: true, authorized: enabled, repo: repo.cwd };
+      const t = await repoTable(), prev = t.get(repo.key);
+      await t.put(repo.key, { ...prev, enabled, path: repo.cwd, updatedAt: Date.now() });
+      if (!enabled) { s.baseline = null; git.setRepoExcludes(repo.cwd, []); return { ok: true, authorized: false, repo: repo.cwd }; }
+      const rec = await refreshRepo(repo, { force: true });
+      return { ok: true, authorized: true, repo: repo.cwd, profiles: rec?.profiles || [] };
+    }
+    if (args.action === 'redetect') {
+      if (!repo.authorized) return { status: 'error', reason: 'repository_not_enabled' };
+      const rec = await refreshRepo(repo, { force: true });
+      return { ok: true, profiles: rec?.profiles || [], detected: rec?.detected || [] };
+    }
+    if (args.action === 'forgetExclude') {
+      const t = await repoTable(), rec = t.get(repo.key);
+      if (!rec || !args.pattern) return { status: 'error', reason: 'nothing_to_forget' };
+      const next = { ...rec, learned: (rec.learned || []).filter(p => p !== args.pattern), updatedAt: Date.now() };
+      await t.put(repo.key, next); applyExcludes(repo.cwd, next);
+      return { ok: true, learned: next.learned };
     }
     if (args.action === 'status') {
+      const rec = repo.key ? (await repoTable()).get(repo.key) : undefined;
       return { ok: true, enabled: s.enabled && config.enabled, authorized: !!repo.authorized, running: running.has(agent.id), git: repo.status,
+        rules: { profiles: rec?.profiles || [], detected: rec?.detected || [], learned: rec?.learned || [], custom: config.excludes, builtIn: config.defaultExcludes },
         history: repo.cwd ? await git.log(repo.cwd, { limit: args.limit || 20, sessionId: agent.id }) : { status: 'ok', commits: [] },
         outcomes: s.outcomes.slice(0, 10), tgitPath: await executable() };
     }
@@ -207,7 +271,7 @@ export function apply(ctx, rawConfig) {
     return next();
   });
   ctx.on('agent/turn-stopping', payload => watch(stop(payload.agent, payload)).catch(() => {}));
-  const epochs = new Map();
+  const epochs = shared.epochs;
   ctx.on('agent/status', ({ agent, status }) => {
     if (!agent) return;
     const epoch = (epochs.get(agent.id) || 0) + 1; epochs.set(agent.id, epoch);
