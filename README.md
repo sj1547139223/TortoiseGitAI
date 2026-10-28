@@ -12,7 +12,7 @@ DeepSeek Harness 插件：AI 每完成一轮修改，自动把**本轮改动**�
   - 本轮开始时工作区不干净（包括未跟踪文件），整轮跳过，你自己的修改永远不会被提交。
   - 以下情况也会跳过：分离 HEAD、正在 merge/rebase、本轮期间 HEAD 或暂存区被别人改动、同一仓库还有其他 agent 正在运行。
   - 不执行 reset、stash 或 push，也不跳过 git hooks。
-  - `.env`、密钥、`node_modules` 等文件不会被提交。
+  - 提交范围：只包含本轮期间发生变化的文件（整文件），不是整个文件夹。以下文件永远不会被自动提交：`.gitignore` 里忽略的；内置编译产物清单（`Objects/`、`Listings/`、`DebugConfig/`、`*.o *.obj *.d *.crf *.axf *.elf *.hex *.lst *.map *.lnp *.dep`、`*.uvguix.*`、`*.uvoptx`、`JLinkLog.txt`、`node_modules/`、`build/`、`dist/` 等）；配置 `excludes` 追加的；`.env`/私钥等敏感文件。编译产物的变化也不会让工作区算作"不干净"。
   - 撤销只用 `git revert`，并且需要确认。
 - **界面**：输入框下方状态栏里的小标签（绿点 + 最新提交号；未启用的仓库显示"未启用"，非 git 目录不显示）。点开弹出面板：按仓库启用/停用、本会话开关、日志/工作区/版本图（打开 TortoiseGit）、本会话 AI 提交列表（对比、撤销，撤销需二次确认）。
 - **AI 工具** `tgit_ai`：可执行 `status`、`log`、`diff`、`open`、`pause`、`resume`、`undo`（撤销需传 `confirm:true`，并且只应在用户明确要求时调用）。
@@ -26,6 +26,8 @@ DeepSeek Harness 插件：AI 每完成一轮修改，自动把**本轮改动**�
 | `tgitPath` | 自动查找注册表 | TortoiseGitProc.exe 路径 |
 | `summaryTimeoutMs` | 15000 | 生成概括的超时时间 |
 | `gitTimeoutMs` | 30000 | 单条 git 命令的超时时间 |
+| `excludes` | `[]` | 额外排除的文件，gitignore 写法，如 `['gen/', '*.bin']` |
+| `defaultExcludes` | true | 是否使用内置编译产物清单 |
 
 ## 限制
 

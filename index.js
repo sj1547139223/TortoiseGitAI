@@ -20,6 +20,10 @@ export const Config = z.object({
   tgitPath: z.string().default(''),
   summaryTimeoutMs: z.number().int().min(100).max(15000).default(15000),
   gitTimeoutMs: z.number().int().min(1000).max(120000).default(30000),
+  /** Extra gitignore-style patterns never auto-committed (on top of .gitignore and the built-in artifact list). */
+  excludes: z.array(z.string()).default([]),
+  /** Use the built-in build-artifact list (Keil/IAR/GCC objects, Objects/, Listings/, *.uvguix.* …). */
+  defaultExcludes: z.boolean().default(true),
 });
 const Request = z.object({
   action: z.enum(['status', 'log', 'diff', 'open', 'pause', 'resume', 'undo', 'enableRepo', 'disableRepo']),
@@ -42,7 +46,7 @@ const textOf = messages => (messages || []).flatMap(m => Array.isArray(m?.conten
 export function apply(ctx, rawConfig) {
   const config = Config.parse(rawConfig || {});
   const shutdown = new AbortController();
-  const git = new GitService({ timeoutMs: config.gitTimeoutMs, signal: shutdown.signal });
+  const git = new GitService({ timeoutMs: config.gitTimeoutMs, signal: shutdown.signal, excludes: config.excludes, defaultExcludes: config.defaultExcludes });
   /** Per-session state: preference, baseline of the current editing interval, outcomes. */
   const states = new Map();
   const running = new Map(); // agent id -> canonical cwd key while that agent runs
@@ -89,7 +93,7 @@ export function apply(ctx, rawConfig) {
     if (repo.key) running.set(agent.id, repo.key);
     if (!repo.cwd || !repo.authorized) return; // not a repo / not enabled: silently out of scope
     const baseline = await git.baseline(repo.cwd);
-    if (baseline.status !== 'ready') { record(agent.id, { status: 'skipped', reason: baseline.reason, turn: payload.turn }); s.baseline = { skipped: true }; return; }
+    if (baseline.status !== 'ready') { record(agent.id, { status: 'skipped', reason: baseline.dirty?.length ? `${baseline.reason}: ${baseline.dirty.slice(0, 5).join(', ')}${baseline.dirty.length > 5 ? ' …' : ''}` : baseline.reason, turn: payload.turn }); s.baseline = { skipped: true }; return; }
     s.baseline = baseline; s.request = textOf(payload.messages);
   }
 

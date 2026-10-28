@@ -8,3 +8,6 @@
         tgitPath: 'D:\TortoiseGit\bin\TortoiseGitProc.exe'
         summaryTimeoutMs: 15000
         gitTimeoutMs: 30000
+        # 额外不自动提交的文件（gitignore 写法，叠加在 .gitignore 和内置编译产物清单之上）
+        excludes: []
+        defaultExcludes: true

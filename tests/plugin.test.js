@@ -120,3 +120,32 @@ test('summary cleaning and other-agent guard', async t => {
   await turn(h, 1, () => fs.writeFile(path.join(cwd, 'a.txt'), 'two\n'));
   assert.equal(git(cwd, 'rev-list', '--count', 'HEAD'), '1');
 });
+
+test('build artifacts are never committed and do not dirty the baseline', async t => {
+  const cwd = await repo(t), h = harness(cwd);
+  await fs.mkdir(path.join(cwd, 'Objects'), { recursive: true });
+  await fs.writeFile(path.join(cwd, 'Objects', 'app.axf'), 'old');            // leftover from an earlier build
+  await fs.writeFile(path.join(cwd, 'proj.uvguix.sj'), 'layout');
+  await turn(h, 1, async () => {
+    await fs.writeFile(path.join(cwd, 'a.txt'), 'two\n');
+    await fs.writeFile(path.join(cwd, 'Objects', 'main.o'), Buffer.alloc(1000, 1));
+    await fs.mkdir(path.join(cwd, 'Listings')); await fs.writeFile(path.join(cwd, 'Listings', 'app.map'), 'map');
+    await fs.writeFile(path.join(cwd, 'main.crf'), 'x'); await fs.writeFile(path.join(cwd, '.env'), 'SECRET=1');
+  });
+  assert.equal(git(cwd, 'rev-list', '--count', 'HEAD'), '2');
+  assert.deepEqual(git(cwd, 'show', '--name-only', '--format=', 'HEAD').split(/\r?\n/), ['a.txt']);
+});
+
+test('custom excludes and a staged artifact still count as user work', async t => {
+  const { createExcluder } = await import('../lib/git.js');
+  const ex = createExcluder(['gen/', '*.cache', '/top.txt', 'docs/**/*.pdf']);
+  assert.ok(ex('src/gen/x.c')); assert.ok(ex('a/b.cache')); assert.ok(ex('top.txt')); assert.ok(!ex('sub/top.txt'));
+  assert.ok(ex('docs/a/b/c.pdf')); assert.ok(ex('Objects/x.bin')); assert.ok(ex('KEIL/OBJECTS/x.bin'));
+  assert.ok(!ex('src/main.c')); assert.ok(!ex('Core/Src/objects.c')); assert.ok(ex('x/.env.local'));
+  const noDefaults = createExcluder([], { defaults: false });
+  assert.ok(!noDefaults('Objects/x.o')); assert.ok(noDefaults('.env'));
+  const cwd = await repo(t), h = harness(cwd);
+  await fs.writeFile(path.join(cwd, 'x.o'), 'o'); git(cwd, 'add', '-f', 'x.o');
+  await turn(h, 1, () => fs.writeFile(path.join(cwd, 'a.txt'), 'two\n'));
+  assert.equal(git(cwd, 'rev-list', '--count', 'HEAD'), '1');
+});
