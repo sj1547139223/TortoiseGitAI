@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { realpath } from 'node:fs/promises';
 import path from 'node:path';
+import { createHash } from 'node:crypto';
 import { GitService } from './lib/git.js';
 import { generateSummary } from './lib/summary.js';
 import { locateTortoiseGit, openTortoiseGit } from './lib/tgit.js';
@@ -12,7 +13,7 @@ import { locateTortoiseGit, openTortoiseGit } from './lib/tgit.js';
  * dirty at its first step is never committed; no reset/stash/push; undo = git revert.
  */
 export const name = 'tortoisegit-ai';
-export const inject = ['tools', 'agents', 'workingDirectory', 'llm', 'webServer', 'connection'];
+export const inject = ['tools', 'agents', 'workingDirectory', 'llm', 'webServer', 'connection', 'storageDomain'];
 export const Config = z.object({
   enabled: z.boolean().default(true),
   allowedRoots: z.array(z.string()).default([]),
@@ -21,13 +22,16 @@ export const Config = z.object({
   gitTimeoutMs: z.number().int().min(1000).max(120000).default(30000),
 });
 const Request = z.object({
-  action: z.enum(['status', 'log', 'diff', 'open', 'pause', 'resume', 'undo']),
+  action: z.enum(['status', 'log', 'diff', 'open', 'pause', 'resume', 'undo', 'enableRepo', 'disableRepo']),
   command: z.enum(['log', 'showcompare', 'repostatus', 'diff', 'blame', 'revisiongraph']).optional(),
   sha: z.string().regex(/^[a-f0-9]{7,64}$/i).optional(),
   path: z.string().max(2000).optional(),
   limit: z.number().int().min(1).max(100).optional(),
   confirm: z.boolean().optional(),
 }).strict();
+/** Persistent per-repository opt-in (key = canonical repository root). */
+const REPOS_DOMAIN = { name: 'tortoisegit_ai', version: 1, tables: { repos: { valueSchema: z.object({ enabled: z.boolean(), path: z.string(), updatedAt: z.number() }) } } };
+const UI_ONLY = new Set(['enableRepo', 'disableRepo']);
 const ROUTE_STATUS = '/api/tortoisegit-ai.status';
 const ROUTE_ACTION = '/api/tortoisegit-ai.action';
 const keyOf = value => process.platform === 'win32' ? value.toLowerCase() : value;
@@ -44,6 +48,11 @@ export function apply(ctx, rawConfig) {
   const running = new Map(); // agent id -> canonical cwd key while that agent runs
   const pending = new Set();
   let discovery;
+  const domain = ctx.storageDomain.open(REPOS_DOMAIN);
+  domain.catch(() => {});
+  const table = async () => (await domain).table('repos');
+  const idOf = key => createHash('sha256').update(key).digest('hex').slice(0, 32); // storage-safe key
+  const repoTable = async () => { const t = await table(); return { get: key => t.get(idOf(key)), put: (key, value) => t.put(idOf(key), value) }; };
   const executable = () => discovery ||= locateTortoiseGit(config.tgitPath);
   const stateOf = id => { let s = states.get(id); if (!s) states.set(id, s = { enabled: config.enabled, baseline: null, request: '', outcomes: [] }); return s; };
   const record = (id, value) => {
@@ -57,14 +66,19 @@ export function apply(ctx, rawConfig) {
     for (const root of config.allowedRoots) { try { out.push(keyOf(await realpath(root))); } catch { /* missing roots are not authorized */ } }
     return out;
   };
-  /** Resolve the agent's repository top level and require it to be an allowed root. */
+  /** A stored per-repo choice wins; otherwise the configured allowedRoots decide. */
+  const isAuthorized = async key => {
+    const stored = (await repoTable()).get(key);
+    if (stored) return stored.enabled;
+    return (await allowedRoots()).includes(key);
+  };
+  /** Resolve the agent's repository top level and whether auto-commit is enabled there. */
   const repoOf = async (agent, signal) => {
     const cwd = await ctx.workingDirectory.ensure(agent, signal);
     const status = await git.status(cwd);
     if (status.status !== 'ok') return { status };
-    const top = keyOf(await realpath(status.cwd));
-    if (!(await allowedRoots()).includes(top)) return { status: { status: 'skipped', reason: 'repository_not_authorized', cwd: status.cwd } };
-    return { cwd: status.cwd, key: top, status };
+    const key = keyOf(await realpath(status.cwd));
+    return { cwd: status.cwd, key, status, authorized: await isAuthorized(key) };
   };
   const othersRunning = (self, key) => [...running].some(([id, k]) => id !== self && k === key);
 
@@ -73,7 +87,7 @@ export function apply(ctx, rawConfig) {
     if (s.baseline || !s.enabled || !config.enabled || !isRoot(agent)) return;
     const repo = await repoOf(agent, payload.signal);
     if (repo.key) running.set(agent.id, repo.key);
-    if (!repo.cwd) return; // not a repo / not authorized: silently out of scope
+    if (!repo.cwd || !repo.authorized) return; // not a repo / not enabled: silently out of scope
     const baseline = await git.baseline(repo.cwd);
     if (baseline.status !== 'ready') { record(agent.id, { status: 'skipped', reason: baseline.reason, turn: payload.turn }); s.baseline = { skipped: true }; return; }
     s.baseline = baseline; s.request = textOf(payload.messages);
@@ -96,8 +110,9 @@ export function apply(ctx, rawConfig) {
     } catch (error) { record(agent.id, { status: 'error', reason: message(error), turn }); }
   }
 
-  async function operate(agent, raw, signal) {
+  async function operate(agent, raw, signal, { ui = false } = {}) {
     const args = Request.parse(raw);
+    if (UI_ONLY.has(args.action) && !ui) throw new Error('only the user can enable or disable a repository (TortoiseGit AI pill)');
     const s = stateOf(agent.id);
     if (args.action === 'pause' || args.action === 'resume') {
       s.enabled = args.action === 'resume';
@@ -105,8 +120,15 @@ export function apply(ctx, rawConfig) {
       return { ok: true, enabled: s.enabled };
     }
     const repo = await repoOf(agent, signal);
+    if (args.action === 'enableRepo' || args.action === 'disableRepo') {
+      if (!repo.cwd) return repo.status;
+      const enabled = args.action === 'enableRepo';
+      await (await repoTable()).put(repo.key, { enabled, path: repo.cwd, updatedAt: Date.now() });
+      if (!enabled) s.baseline = null;
+      return { ok: true, authorized: enabled, repo: repo.cwd };
+    }
     if (args.action === 'status') {
-      return { ok: true, enabled: s.enabled && config.enabled, running: running.has(agent.id), git: repo.status,
+      return { ok: true, enabled: s.enabled && config.enabled, authorized: !!repo.authorized, running: running.has(agent.id), git: repo.status,
         history: repo.cwd ? await git.log(repo.cwd, { limit: args.limit || 20, sessionId: agent.id }) : { status: 'ok', commits: [] },
         outcomes: s.outcomes.slice(0, 10), tgitPath: await executable() };
     }
@@ -115,6 +137,7 @@ export function apply(ctx, rawConfig) {
     if (args.action === 'diff') return git.diff(repo.cwd, { commit: args.sha, maxChars: 16000 });
     if (args.action === 'open') return openTortoiseGit({ executable: await executable(), cwd: repo.cwd, command: args.command || 'log', sha: args.sha, file: args.path, sessionId: agent.id });
     if (args.action === 'undo') {
+      if (!repo.authorized) throw new Error('repository_not_enabled');
       if (!args.sha || args.confirm !== true) throw new Error('undo requires sha and confirm:true after an explicit user request');
       if (othersRunning(agent.id, repo.key)) throw new Error('other_agent_active: another agent is editing this repository');
       const result = await git.undo(repo.cwd, args.sha, agent.id);
@@ -164,7 +187,7 @@ export function apply(ctx, rawConfig) {
       const chunks = []; let size = 0;
       for await (const c of req) { size += c.length; if (size > 16384) return send(res, 413, { ok: false, reason: 'too large' }); chunks.push(c); }
       const { session, ...args } = JSON.parse(Buffer.concat(chunks).toString('utf8'));
-      send(res, 200, await operate(agentFor(session), args));
+      send(res, 200, await operate(agentFor(session), args, undefined, { ui: true }));
     } catch (error) { send(res, error.http || 400, { ok: false, reason: message(error) }); }
   } }));
 
@@ -188,7 +211,7 @@ export function apply(ctx, rawConfig) {
     else { running.delete(agent.id); if (states.has(agent.id)) states.get(agent.id).baseline = null; }
   });
   ctx.on('agent/disposed', ({ agent }) => { running.delete(agent.id); states.delete(agent.id); });
-  ctx.effect(() => async () => { shutdown.abort(); await Promise.allSettled([...pending]); });
+  ctx.effect(() => async () => { shutdown.abort(); await Promise.allSettled([...pending]); try { await (await domain).close(); } catch { /* closed by the facility */ } });
 }
 
 export const _internal = { textOf, keyOf, path };

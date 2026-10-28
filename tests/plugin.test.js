@@ -30,6 +30,7 @@ function harness(cwd, { roots = [cwd], llm = fakeLlm('更新问候语'), others 
     llm,
     webServer: { register: r => { routes[r.path] = r.handler; return () => {}; } },
     connection: { requestRejection: () => undefined },
+    storageDomain: { open: async spec => { assert.match(spec.name, /^[a-z][a-z0-9_]*$/); const m = new Map(); return { table: () => ({ get: k => m.get(k), put: async (k, v) => { spec.tables.repos.valueSchema.parse(v); m.set(k, v); } }), close: async () => {} }; } },
   };
   apply(ctx, { allowedRoots: roots, tgitPath: 'C:\\nope\\TortoiseGitProc.exe' });
   const emit = async (name, payload) => { for (const fn of listeners[name] || []) await fn({ agent, ...payload }, async () => ({ kind: 'enter' })); };
@@ -91,6 +92,21 @@ test('HTTP routes serve status and actions for live sessions only', async t => {
   const body = Buffer.from(JSON.stringify({ session: 'sess-1', action: 'pause' }));
   const post = await call('/api/tortoisegit-ai.action', { method: 'POST', headers: { 'content-type': 'application/json' }, [Symbol.asyncIterator]: async function* () { yield body; } });
   assert.equal(post.body.enabled, false);
+});
+
+test('a repository can be enabled from the UI only, and then auto-commits', async t => {
+  const cwd = await repo(t), h = harness(cwd, { roots: [] });
+  const call = (route, req) => new Promise(resolve => { const res = { headers: {}, setHeader(k, v) { this.headers[k] = v; }, end(b) { resolve({ status: this.statusCode, body: b && JSON.parse(b) }); } }; h.routes[route](req, res); });
+  const post = payload => { const body = Buffer.from(JSON.stringify({ session: 'sess-1', ...payload })); return call('/api/tortoisegit-ai.action', { method: 'POST', headers: { 'content-type': 'application/json' }, [Symbol.asyncIterator]: async function* () { yield body; } }); };
+  const before = await call('/api/tortoisegit-ai.status', { method: 'GET', url: '/x?session=sess-1' });
+  assert.equal(before.body.authorized, false); assert.equal(before.body.git.status, 'ok');
+  await assert.rejects(h.tools.tgit_ai.execute({ action: 'enableRepo' }, { agent: h.agent }), /only the user/);
+  assert.equal((await post({ action: 'enableRepo' })).body.authorized, true);
+  await turn(h, 1, () => fs.writeFile(path.join(cwd, 'a.txt'), 'two\n'));
+  assert.equal(git(cwd, 'rev-list', '--count', 'HEAD'), '2');
+  assert.equal((await post({ action: 'disableRepo' })).body.authorized, false);
+  await turn(h, 2, () => fs.writeFile(path.join(cwd, 'a.txt'), 'three\n'));
+  assert.equal(git(cwd, 'rev-list', '--count', 'HEAD'), '2');
 });
 
 test('summary cleaning and other-agent guard', async t => {
