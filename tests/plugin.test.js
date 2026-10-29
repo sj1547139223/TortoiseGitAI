@@ -364,3 +364,39 @@ test('folder picker first: list one level, scan only the selection, skip artifac
   assert.equal(preview.keptFiles + 1, files.length);
   assert.equal(git(cwd, 'status', '--porcelain'), '');
 });
+
+test('csb regressions: Vivado/Vitis/Python detected, unselected nested repo ignored, empty repo can be set up again', async t => {
+  const base = process.env.TGAI_TEST_ROOT || path.parse(process.cwd()).root;
+  const cwd = await fs.realpath(await fs.mkdtemp(path.join(base, 'tgai-csb-')));
+  t.after(() => fs.rm(cwd, { recursive: true, force: true, maxRetries: 5 }));
+  const gcfg = `${cwd}.gitconfig`;
+  await fs.writeFile(gcfg, '[user]\n\tname = T\n\temail = t@example.invalid\n[core]\n\tautocrlf = false\n[commit]\n\tgpgsign = false\n');
+  const prev = process.env.GIT_CONFIG_GLOBAL; process.env.GIT_CONFIG_GLOBAL = gcfg;
+  t.after(() => { if (prev === undefined) delete process.env.GIT_CONFIG_GLOBAL; else process.env.GIT_CONFIG_GLOBAL = prev; return fs.rm(gcfg, { force: true }); });
+  const put = async (p, c = 'x') => { await fs.mkdir(path.dirname(path.join(cwd, p)), { recursive: true }); await fs.writeFile(path.join(cwd, p), c); };
+  for (const p of ['z/viv/p.xpr', 'z/viv/p.srcs/sources_1/new/top.v', 'z/viv/p.gen/sources_1/bd/sys/hdl/sys.v', 'z/viv/p.runs/synth_1/x.tcl', 'z/viv/p.cache/a.json',
+    'z/ws/_ide/launch.json', 'z/ws/app/vitis-comp.json', 'z/ws/app/src/main.c', 'z/ws/app/build/x.c', 'z/ws/plat/vitis-comp.json',
+    'z/ws/plat/ps7_cortexa9_0/standalone_domain/bsp/libsrc/drv/x.c', 'z/ws/plat/ps7_cortexa9_0/standalone_domain/bsp/include/x.h', 'z/ws/plat/export/plat/sw/a.h',
+    'z/ws/plat/fsbl/CMakeLists.txt', 'z/ws/plat/fsbl/main.c', 'z/ws/plat/fsbl/build_jtag/x.c', 'z/tool/app.py', 'z/tool/__pycache__/app.cpython-311.pyc', 'z/constraints/pins.xdc',
+    'other/big.c']) await put(p);
+  await fs.mkdir(path.join(cwd, 'empty_nested'), { recursive: true });
+  execFileSync('git', ['init', '-q'], { cwd: path.join(cwd, 'empty_nested') }); // unselected repo without commits used to break `git add -A`
+  execFileSync('git', ['init', '-q'], { cwd }); // leftover empty repository from a failed attempt
+  await fs.writeFile(path.join(cwd, '.gitignore'), '# ---- TortoiseGit AI：手动选择的文件夹（未选择的不纳入；后面的规则优先） ----\n*\n!*/\n!/.gitignore\nmine.tmp\n');
+  const h = harness(cwd, { roots: [], llm: fakeLlm('{"ignore":[]}') });
+  const st = await postTo(h, { action: 'status' });
+  assert.equal(st.noRepo, true); assert.equal(st.emptyRepo, true);
+  const plan = await postTo(h, { action: 'planRepo', selection: [{ dir: 'z', auto: true }] });
+  assert.equal(plan.ok, true, JSON.stringify(plan));
+  const ids = new Set(plan.profiles.map(p => p.id));
+  for (const id of ['vivado', 'vitis', 'vitis-workspace', 'python', 'vivado-hdl']) assert.ok(ids.has(id), `missing ${id}: ${[...ids]}`);
+  const checked = plan.entries.filter(e => e.checked).map(e => e.id);
+  const done = await postTo(h, { action: 'initRepo', planId: plan.planId, checked });
+  assert.equal(done.status, 'committed', JSON.stringify(done));
+  const files = git(cwd, 'ls-files').split(/\r?\n/).sort();
+  assert.deepEqual(files, ['.gitignore', 'z/constraints/pins.xdc', 'z/tool/app.py', 'z/viv/p.srcs/sources_1/new/top.v', 'z/viv/p.xpr', 'z/ws/app/src/main.c', 'z/ws/app/vitis-comp.json', 'z/ws/plat/fsbl/CMakeLists.txt', 'z/ws/plat/fsbl/main.c', 'z/ws/plat/vitis-comp.json']);
+  const gi = await fs.readFile(path.join(cwd, '.gitignore'), 'utf8');
+  assert.equal(gi.split('# ---- TortoiseGit AI：手动选择').length, 2, 'old generated block replaced, not stacked');
+  assert.match(gi, /^mine\.tmp$/m, 'user rules kept');
+  assert.equal(git(cwd, 'status', '--porcelain'), '');
+});

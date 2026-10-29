@@ -187,9 +187,15 @@ export function apply(ctx, rawConfig) {
       return { ok: true, enabled: s.enabled };
     }
     const repo = await repoOf(agent, signal);
+    // A folder can be set up when it is not in a repository, or is the root of an empty one (no commit yet).
+    const emptyRepo = !!(repo.cwd && repo.status?.status === 'ok' && !repo.status.head);
+    const initable = async () => {
+      if (repo.status?.noRepo) return true;
+      if (!emptyRepo) return false;
+      return keyOf(path.resolve(await ctx.workingDirectory.ensure(agent, signal))) === keyOf(path.resolve(repo.cwd));
+    };
     if (args.action === 'planRepo') {
-      if (repo.cwd) return { status: 'error', reason: 'already_repository' };
-      if (!repo.status?.noRepo) return repo.status;
+      if (!(await initable())) return repo.cwd ? { status: 'error', reason: 'already_repository' } : repo.status;
       const root = await ctx.workingDirectory.ensure(agent, signal);
       const route = agent.session?.requestHeader?.()?.config;
       const plan = await buildPlan(root, { llm: ctx.llm, route, sessionId: agent.id, signal, timeoutMs: 25000, selection: args.selection || null });
@@ -199,7 +205,7 @@ export function apply(ctx, rawConfig) {
       return { ok: true, ...planView(plan) };
     }
     if (args.action === 'listDirs') {
-      if (repo.cwd) return { status: 'error', reason: 'already_repository' };
+      if (!(await initable())) return { status: 'error', reason: 'already_repository' };
       const root = await ctx.workingDirectory.ensure(agent, signal);
       return { ok: true, ...(await listDirs(root, args.dir || '')) };
     }
@@ -212,7 +218,7 @@ export function apply(ctx, rawConfig) {
     if (args.action === 'initRepo') {
       const plan = plans.get(agent.id);
       if (!plan || plan.id !== args.planId || Date.now() - plan.createdAt > PLAN_TTL_MS) return { status: 'error', reason: 'plan_expired' };
-      if (repo.cwd) return { status: 'error', reason: 'already_repository' };
+      if (!(await initable())) return { status: 'error', reason: 'already_repository' };
       const root = await ctx.workingDirectory.ensure(agent, signal);
       if (keyOf(path.resolve(root)) !== keyOf(path.resolve(plan.root))) return { status: 'error', reason: 'plan_expired' };
       if (running.has(agent.id)) return { status: 'error', reason: 'agent_running' };
@@ -265,7 +271,8 @@ export function apply(ctx, rawConfig) {
     if (args.action === 'status') {
       const rec = repo.key ? (await repoTable()).get(repo.key) : undefined;
       return { ok: true, enabled: s.enabled && config.enabled, authorized: !!repo.authorized, running: running.has(agent.id), git: repo.status,
-        ...(repo.status?.noRepo ? { noRepo: true, cwd: repo.status.cwd, initBlocked: initBlockedReason(repo.status.cwd) } : {}),
+        ...(repo.status?.noRepo ? { noRepo: true, cwd: repo.status.cwd, initBlocked: initBlockedReason(repo.status.cwd) }
+          : emptyRepo && await initable() ? { noRepo: true, emptyRepo: true, cwd: repo.cwd, initBlocked: initBlockedReason(repo.cwd) } : {}),
         rules: { profiles: rec?.profiles || [], detected: rec?.detected || [], learned: rec?.learned || [], custom: config.excludes, builtIn: config.defaultExcludes },
         history: repo.cwd ? await git.log(repo.cwd, { limit: args.limit || 20, sessionId: agent.id }) : { status: 'ok', commits: [] },
         outcomes: s.outcomes.slice(0, 10), tgitPath: await executable() };
