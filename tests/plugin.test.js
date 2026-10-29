@@ -187,26 +187,27 @@ test('toolchains are detected (ESP-IDF, PlatformIO, nested) and their outputs ig
 test('the model judges unknown new artifacts; they are omitted, learned, and forgettable', async t => {
   const cwd = await repo(t);
   await fs.mkdir(path.join(cwd, 'src')); await fs.writeFile(path.join(cwd, 'src', 'keep.c'), 'int k;'); git(cwd, 'add', '.'); git(cwd, 'commit', '-q', '-m', 'src');
-  const reply = JSON.stringify({ title: '新增驱动并编译', generated: ['out_fw/app.img', 'out_fw/app.sym', 'src/drv.c', 'a.txt', 'not/listed.x'] });
+  const reply = JSON.stringify({ title: '新增驱动并编译', generated: ['out_fw/app.img', 'out_fw/app.sym', 'src/cache.dat', 'src/drv.c', 'a.txt', 'not/listed.x'] });
   const store = new Map(), h = harness(cwd, { llm: fakeLlm(`结果：${reply}`), store });
   await turn(h, 1, async () => {
     await fs.writeFile(path.join(cwd, 'a.txt'), 'two\n');                    // tracked: may never be omitted
-    await fs.writeFile(path.join(cwd, 'src', 'drv.c'), 'int d;');             // new, flagged, dir has tracked files
+    await fs.writeFile(path.join(cwd, 'src', 'cache.dat'), 'c');              // new, flagged, dir has tracked files
+    await fs.writeFile(path.join(cwd, 'src', 'drv.c'), 'int d;');             // new, flagged, but source code is never omitted
     await fs.mkdir(path.join(cwd, 'out_fw')); await fs.writeFile(path.join(cwd, 'out_fw', 'app.img'), 'x'); await fs.writeFile(path.join(cwd, 'out_fw', 'app.sym'), 'y');
   });
   assert.match(git(cwd, 'log', '-1', '--format=%s'), /^AI: 新增驱动并编译/);
-  assert.deepEqual(git(cwd, 'show', '--name-only', '--format=', 'HEAD').split(/\r?\n/).sort(), ['a.txt']);
+  assert.deepEqual(git(cwd, 'show', '--name-only', '--format=', 'HEAD').split(/\r?\n/).sort(), ['a.txt', 'src/drv.c']);
   const status = await postTo(h, { action: 'status' });
-  assert.deepEqual(status.rules.learned.sort(), ['/out_fw/', '/src/drv.c']);
-  assert.deepEqual(status.outcomes[0].omitted.sort(), ['out_fw/app.img', 'out_fw/app.sym', 'src/drv.c']);
+  assert.deepEqual(status.rules.learned.sort(), ['/out_fw/', '/src/cache.dat']);
+  assert.deepEqual(status.outcomes[0].omitted.sort(), ['out_fw/app.img', 'out_fw/app.sym', 'src/cache.dat']);
   // Next turn: learned artifacts do not dirty the baseline; the model now sees no candidates.
   const h2seen = [];
   const h2 = harness(cwd, { llm: fakeLlm('再改一次', h2seen), store, reload: true });
   await turn(h2, 2, () => fs.writeFile(path.join(cwd, 'a.txt'), 'three\n'));
   assert.equal(git(cwd, 'rev-list', '--count', 'HEAD'), '4');
   assert.doesNotMatch(h2seen[1].messages[0].content[0].text, /candidates/);
-  // Forgetting a rule makes drv.c count as user work again (dirty baseline -> skip).
-  await postTo(h2, { action: 'forgetExclude', pattern: '/src/drv.c' });
+  // Forgetting a rule makes cache.dat count as user work again (dirty baseline -> skip).
+  await postTo(h2, { action: 'forgetExclude', pattern: '/src/cache.dat' });
   await turn(h2, 3, () => fs.writeFile(path.join(cwd, 'a.txt'), 'four\n'));
   assert.equal(git(cwd, 'rev-list', '--count', 'HEAD'), '4');
   await assert.rejects(h2.tools.tgit_ai.execute({ action: 'forgetExclude', pattern: '/out_fw/' }, { agent: h2.agent }), /only the user/);
@@ -229,4 +230,5 @@ test('judge replies are parsed defensively', async () => {
   assert.deepEqual(parseJudge('```json\n{"title":"修复","generated":["a.o","x"]}\n```', ['a.o']), { title: '修复', generated: ['a.o'] });
   assert.deepEqual(parseJudge('修复串口', ['a.o']), { title: '修复串口', generated: [] });
   assert.deepEqual(parseJudge('{bad json', ['a.o']).generated, []);
+  assert.deepEqual(parseJudge('{"title":"t","generated":["commands/x.mjs","src/main.c","docs/a.md","out/fw.bin"]}', ['commands/x.mjs', 'src/main.c', 'docs/a.md', 'out/fw.bin']).generated, ['out/fw.bin']);
 });
