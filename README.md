@@ -37,6 +37,37 @@ DeepSeek Harness 插件：AI 每完成一轮修改，自动把**本轮改动**�
 - 只对主会话的轮次自动提交；子 agent 的改动会算进父会话那一轮。
 - 后台任务如果在这一轮结束后才写文件，这些改动不会算进本轮，并且会让下一轮的基线变脏，导致下一轮跳过。
 
+## 在 Droid 中使用
+
+同一个仓库也是一个 Droid 插件（`.factory-plugin/`、`hooks/hooks.json`、`mcp.json`、`droid/`）。行为与安全边界与 DSH 版一致，`lib/` 共用。
+
+安装（本仓库同时是本地 marketplace）：
+
+```
+droid plugin marketplace add H:\TortoiseGitAI
+droid plugin install tortoisegit-ai@TortoiseGitAI --scope user
+```
+
+安装时插件会被复制到 Droid 的缓存里，所以改完源码要执行 `droid plugin marketplace update TortoiseGitAI` 和 `droid plugin update tortoisegit-ai@TortoiseGitAI --scope user`，然后重启 Droid。hooks 只在 Droid 启动时加载。
+
+启用仓库（只能由你操作，AI 工具不能启用）：
+
+```
+node droid/cli.js enable  [仓库路径]   # 默认当前目录
+node droid/cli.js disable [仓库路径]
+node droid/cli.js status  [仓库路径]   # 查看工具链识别和产物规则
+node droid/cli.js forget <规则> [仓库路径]   # 恢复提交被 AI 判为产物的文件
+```
+
+与 DSH 版的区别：
+- 轮次边界：`UserPromptSubmit` 记录基线，`Stop` 提交，`SessionEnd` 清理。基线保存在 `~/.factory/tortoisegit-ai/sessions/`。
+- 提交标题：调用一次 `droid exec`（默认 `claude-haiku-4-5-20251001`，空目录、无可用写工具），大约需要 10 秒；超时或失败就用 `AI: 修改 <文件…>`。`AI-Model` 尾注记录生成标题的模型。
+- 用户中断（Esc）的那一轮没有 `Stop` 事件，那一轮不会提交；它留下的改动会让下一轮基线变脏，导致下一轮跳过。
+- "同一仓库还有其他 agent" 改为用 `~/.factory/tortoisegit-ai/running/` 下的标记文件判断，2 小时后过期。
+- `tgit_ai` 以 MCP 工具形式提供（`tortoisegit-ai___tgit_ai`），会话按"同仓库最近一次 hook 记录的会话"确定。
+- 没有底部小标签和面板。
+
+配置文件是 `~/.factory/tortoisegit-ai/config.json`（可选），字段与上表相同，另外有：`summaryModel`、`summaryReasoning`（默认 `off`）、`droidPath`（默认 `droid`）、`summaryTimeoutMs`（默认 25000，最大 60000）。
 ## 开发
 
 ```

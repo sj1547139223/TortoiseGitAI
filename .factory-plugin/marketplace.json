@@ -1,0 +1,14 @@
+{
+  "name": "tortoisegit-ai-local",
+  "description": "Local marketplace for the TortoiseGit AI plugin",
+  "owner": {
+    "name": "local"
+  },
+  "plugins": [
+    {
+      "name": "tortoisegit-ai",
+      "description": "AI 回合自动提交与 TortoiseGit 原生窗口桥接",
+      "source": "./"
+    }
+  ]
+}

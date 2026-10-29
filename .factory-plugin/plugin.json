@@ -1,0 +1,13 @@
+{
+  "name": "tortoisegit-ai",
+  "description": "Droid 每轮修改自动提交到当前分支（AI 中文标题），并桥接 TortoiseGit 原生窗口",
+  "version": "0.1.0",
+  "author": {
+    "name": "local"
+  },
+  "keywords": [
+    "git",
+    "tortoisegit",
+    "auto-commit"
+  ]
+}

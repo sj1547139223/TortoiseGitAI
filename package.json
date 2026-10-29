@@ -4,9 +4,42 @@
   "private": true,
   "type": "module",
   "description": "AI 回合自动提交与 TortoiseGit 原生窗口桥接",
-  "exports": {".": "./index.js", "./client": "./client.js", "./locale/*.json": "./locale/*.json", "./icon": "./icon.svg"},
-  "files": ["index.js", "client.js", "lib", "cordis.patch.yml", "locale", "icon.svg", "README.md"],
-  "scripts": {"test": "node --test tests/*.test.js", "check": "node --check index.js && node --check client.js"},
-  "dependencies": {"zod": "^4.0.0"},
-  "dsh": {"bundle": {"patch": "./cordis.patch.yml"}, "client": {"platform": "web", "immediately": true, "inject": ["@deepseek-ai/dsh-client-ui-conversation"]}}
+  "exports": {
+    ".": "./index.js",
+    "./client": "./client.js",
+    "./locale/*.json": "./locale/*.json",
+    "./icon": "./icon.svg"
+  },
+  "files": [
+    "index.js",
+    "client.js",
+    "lib",
+    "cordis.patch.yml",
+    "locale",
+    "icon.svg",
+    "README.md",
+    "droid",
+    "hooks",
+    "mcp.json",
+    ".factory-plugin"
+  ],
+  "scripts": {
+    "test": "node --test tests/*.test.js",
+    "check": "node --check index.js && node --check client.js && node --check droid/hook.js && node --check droid/mcp.js && node --check droid/cli.js"
+  },
+  "dependencies": {
+    "zod": "^4.0.0"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "immediately": true,
+      "inject": [
+        "@deepseek-ai/dsh-client-ui-conversation"
+      ]
+    }
+  }
 }

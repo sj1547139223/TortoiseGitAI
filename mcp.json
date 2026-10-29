@@ -1,0 +1,10 @@
+{
+  "mcpServers": {
+    "tortoisegit-ai": {
+      "command": "node",
+      "args": [
+        "${DROID_PLUGIN_ROOT}/droid/mcp.js"
+      ]
+    }
+  }
+}

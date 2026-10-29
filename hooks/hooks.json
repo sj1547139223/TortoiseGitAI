@@ -1,0 +1,35 @@
+{
+  "UserPromptSubmit": [
+    {
+      "hooks": [
+        {
+          "type": "command",
+          "command": "node \"${DROID_PLUGIN_ROOT}/droid/hook.js\" start",
+          "timeout": 30
+        }
+      ]
+    }
+  ],
+  "Stop": [
+    {
+      "hooks": [
+        {
+          "type": "command",
+          "command": "node \"${DROID_PLUGIN_ROOT}/droid/hook.js\" stop",
+          "timeout": 90
+        }
+      ]
+    }
+  ],
+  "SessionEnd": [
+    {
+      "hooks": [
+        {
+          "type": "command",
+          "command": "node \"${DROID_PLUGIN_ROOT}/droid/hook.js\" end",
+          "timeout": 10
+        }
+      ]
+    }
+  ]
+}
