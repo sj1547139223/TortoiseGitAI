@@ -120,5 +120,5 @@
 !.clang-tidy
 !.clangd
 
-﻿node_modules/
+node_modules/
 .tools/

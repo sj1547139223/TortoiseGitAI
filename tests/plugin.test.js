@@ -296,3 +296,40 @@ test('an existing repository can be switched to code-only (files stay on disk)',
   assert.equal((await postTo(h, { action: 'codeOnly' })).whitelisted, true);
   await assert.rejects(h.tools.tgit_ai.execute({ action: 'codeOnly', confirm: true }, { agent: h.agent }), /only the user|nvalid/);
 });
+
+test('manual folder selection: only chosen folders, per-folder auto detection, preview equals Git', async t => {
+  const base = process.env.TGAI_TEST_ROOT || path.parse(process.cwd()).root;
+  const cwd = await fs.realpath(await fs.mkdtemp(path.join(base, 'tgai-manual-')));
+  t.after(() => fs.rm(cwd, { recursive: true, force: true, maxRetries: 5 }));
+  const gcfg = `${cwd}.gitconfig`;
+  await fs.writeFile(gcfg, '[user]\n\tname = T\n\temail = t@example.invalid\n[core]\n\tautocrlf = false\n[commit]\n\tgpgsign = false\n');
+  const prev = process.env.GIT_CONFIG_GLOBAL; process.env.GIT_CONFIG_GLOBAL = gcfg;
+  t.after(() => { if (prev === undefined) delete process.env.GIT_CONFIG_GLOBAL; else process.env.GIT_CONFIG_GLOBAL = prev; return fs.rm(gcfg, { force: true }); });
+  const put = async (p, c = 'x') => { await fs.mkdir(path.dirname(path.join(cwd, p)), { recursive: true }); await fs.writeFile(path.join(cwd, p), c); };
+  for (const p of ['main.c', 'README.md', 'esp/CMakeLists.txt', 'esp/src/a.c', 'esp/docs/x.md', 'esp/build/o.c', 'esp/vendorlib/any.md', 'esp/vendorlib/bin/tool',
+    'tool/t.py', 'tool/notes.md', 'tool/build/out.bin', 'tool/cache/c.py', 'skip/s.c', 'skip/keep/k.c', 'skip/keep/k.md', 'my docs/a.c', 'tool/.env']) await put(p);
+  const h = harness(cwd, { roots: [], llm: fakeLlm('{"ignore":[]}') });
+  const plan = await postTo(h, { action: 'planRepo' });
+  assert.ok(plan.tree.some(r => r.path === 'esp/vendorlib' && r.depth === 2));
+  const selection = [{ dir: '', auto: true }, { dir: 'esp', auto: true }, { dir: 'esp/vendorlib', auto: false }, { dir: 'tool', auto: false },
+    { dir: 'tool/cache', include: false, auto: true }, { dir: 'skip/keep', auto: true }, { dir: 'my docs', auto: false }, { dir: '../evil', auto: false }];
+  const checked = plan.entries.filter(e => e.checked).map(e => e.id);
+  const preview = await postTo(h, { action: 'planPreview', planId: plan.planId, mode: 'manual', checked, selection });
+  assert.equal((await postTo(h, { action: 'initRepo', planId: plan.planId, mode: 'manual', checked, selection: [] })).reason, 'nothing_selected');
+  const done = await postTo(h, { action: 'initRepo', planId: plan.planId, mode: 'manual', checked, selection });
+  assert.equal(done.status, 'committed', JSON.stringify(done));
+  const files = git(cwd, 'ls-files').split(/\r?\n/).sort();
+  assert.deepEqual(files, ['.gitignore', 'esp/CMakeLists.txt', 'esp/src/a.c', 'esp/vendorlib/any.md', 'esp/vendorlib/bin/tool', 'main.c', 'my docs/a.c', 'skip/keep/k.c', 'tool/build/out.bin', 'tool/notes.md', 'tool/t.py']);
+  assert.equal(preview.keptFiles + 1, files.length);
+  assert.equal(git(cwd, 'status', '--porcelain'), '');
+  // Later AI turns follow the same rules: a new doc in an auto folder stays out, one in an "all" folder goes in.
+  await turn(h, 1, async () => { await put('esp/src/b.c'); await put('esp/docs/y.md'); await put('tool/more.md'); await put('skip/n.c'); });
+  assert.deepEqual(git(cwd, 'show', '--name-only', '--format=', 'HEAD').split(/\r?\n/).sort(), ['esp/src/b.c', 'tool/more.md']);
+});
+
+test('a UTF-8 BOM in an existing .gitignore does not break its first rule', async () => {
+  const { gitignoreText, manualGitignore } = await import('../lib/init.js');
+  for (const text of [gitignoreText([], '\uFEFFnode_modules/\n', 'code'), manualGitignore([], [{ dir: 'a', auto: true }], '\uFEFFnode_modules/\n')]) {
+    assert.ok(!text.includes('\uFEFF')); assert.match(text, /^node_modules\/$/m);
+  }
+});
