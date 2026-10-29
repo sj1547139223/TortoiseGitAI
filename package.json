@@ -21,7 +21,8 @@
     "droid",
     "hooks",
     "mcp.json",
-    ".factory-plugin"
+    ".factory-plugin",
+    "commands"
   ],
   "scripts": {
     "test": "node --test tests/*.test.js",

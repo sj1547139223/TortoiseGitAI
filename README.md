@@ -50,7 +50,7 @@ droid plugin install tortoisegit-ai@TortoiseGitAI --scope user
 
 安装时插件会被复制到 Droid 的缓存里，所以改完源码要执行 `droid plugin marketplace update TortoiseGitAI` 和 `droid plugin update tortoisegit-ai@TortoiseGitAI --scope user`，然后重启 Droid。hooks 只在 Droid 启动时加载。
 
-启用仓库（只能由你操作，AI 工具不能启用）：
+启用仓库（只能由你操作，AI 工具不能启用）：在 Droid 输入框里执行 `/tgit-enable`，启用当前目录所在的仓库；也可以写成 `/tgit-enable <路径>`。或者用命令行：
 
 ```
 node droid/cli.js enable  [仓库路径]   # 默认当前目录
