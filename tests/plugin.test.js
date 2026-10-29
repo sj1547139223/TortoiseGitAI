@@ -400,3 +400,25 @@ test('csb regressions: Vivado/Vitis/Python detected, unselected nested repo igno
   assert.match(gi, /^mine\.tmp$/m, 'user rules kept');
   assert.equal(git(cwd, 'status', '--porcelain'), '');
 });
+
+test('Quartus project: keeps project/HDL/IP, drops db, output_files and reports', async t => {
+  const base = process.env.TGAI_TEST_ROOT || path.parse(process.cwd()).root;
+  const cwd = await fs.realpath(await fs.mkdtemp(path.join(base, 'tgai-qts-')));
+  t.after(() => fs.rm(cwd, { recursive: true, force: true, maxRetries: 5 }));
+  const gcfg = `${cwd}.gitconfig`;
+  await fs.writeFile(gcfg, '[user]\n\tname = T\n\temail = t@example.invalid\n[core]\n\tautocrlf = false\n[commit]\n\tgpgsign = false\n');
+  const prev = process.env.GIT_CONFIG_GLOBAL; process.env.GIT_CONFIG_GLOBAL = gcfg;
+  t.after(() => { if (prev === undefined) delete process.env.GIT_CONFIG_GLOBAL; else process.env.GIT_CONFIG_GLOBAL = prev; return fs.rm(gcfg, { force: true }); });
+  const put = async (p, c = 'x') => { await fs.mkdir(path.dirname(path.join(cwd, p)), { recursive: true }); await fs.writeFile(path.join(cwd, p), c); };
+  for (const p of ['fpga/top.qpf', 'fpga/top.qsf', 'fpga/top.sdc', 'fpga/rtl/top.v', 'fpga/ip/pll.qip', 'fpga/ip/pll.v', 'fpga/soc.qsys', 'fpga/ram.mif', 'fpga/top.qws',
+    'fpga/db/top.db_info', 'fpga/db/x.v', 'fpga/incremental_db/README', 'fpga/output_files/top.sof', 'fpga/output_files/top.fit.rpt', 'fpga/top.map.summary', 'fpga/PLLJ_PLLSPE_INFO.txt',
+    'fpga/simulation/modelsim/top.vo', 'fpga/simulation/modelsim/tb.do', 'fpga/simulation/modelsim/rtl_work/_info', 'fpga/simulation/modelsim/transcript', 'fpga/simulation/modelsim/vsim.wlf']) await put(p);
+  const h = harness(cwd, { roots: [], llm: fakeLlm('{"ignore":[]}') });
+  const plan = await postTo(h, { action: 'planRepo', selection: [{ dir: 'fpga', auto: true }] });
+  assert.ok(plan.profiles.some(p => p.id === 'quartus'), JSON.stringify(plan.profiles));
+  assert.ok(plan.profiles.some(p => p.id === 'modelsim'));
+  const done = await postTo(h, { action: 'initRepo', planId: plan.planId, checked: plan.entries.filter(e => e.checked).map(e => e.id) });
+  assert.equal(done.status, 'committed', JSON.stringify(done));
+  assert.deepEqual(git(cwd, 'ls-files').split(/\r?\n/).sort(), ['.gitignore', 'fpga/ip/pll.qip', 'fpga/ip/pll.v', 'fpga/ram.mif', 'fpga/rtl/top.v', 'fpga/simulation/modelsim/tb.do', 'fpga/soc.qsys', 'fpga/top.qpf', 'fpga/top.qsf', 'fpga/top.sdc']);
+  assert.equal(git(cwd, 'status', '--porcelain'), '');
+});
