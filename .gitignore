@@ -122,3 +122,9 @@
 
 node_modules/
 .tools/
+
+# Package resources and docs published with the plugin
+!/README.md
+!/LICENSE
+!/icon.svg
+!/commands/*.md

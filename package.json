@@ -4,6 +4,29 @@
   "private": true,
   "type": "module",
   "description": "AI 回合自动提交与 TortoiseGit 原生窗口桥接",
+  "keywords": [
+    "dsh",
+    "deepseek-harness",
+    "tortoisegit",
+    "git",
+    "auto-commit",
+    "factory-droid",
+    "codex"
+  ],
+  "author": "sj1547139223",
+  "license": "MIT",
+  "homepage": "https://github.com/sj1547139223/TortoiseGitAI#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/sj1547139223/TortoiseGitAI.git"
+  },
+  "bugs": {
+    "url": "https://github.com/sj1547139223/TortoiseGitAI/issues"
+  },
+  "engines": {
+    "node": ">=20",
+    "dsh": ">=0.2.1-rc.3"
+  },
   "exports": {
     ".": "./index.js",
     "./client": "./client.js",
@@ -23,7 +46,8 @@
     "hooks",
     "mcp.json",
     ".factory-plugin",
-    "commands"
+    "commands",
+    "LICENSE"
   ],
   "scripts": {
     "test": "node --test tests/*.test.js",
