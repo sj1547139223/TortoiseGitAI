@@ -50,7 +50,7 @@ test('turn edits are committed with LLM summary and trailers', async t => {
   const cwd = await repo(t), seen = [], h = harness(cwd, { llm: fakeLlm('**更新问候语**', seen) });
   await turn(h, 1, () => fs.writeFile(path.join(cwd, 'a.txt'), 'two\n'));
   const body = git(cwd, 'log', '-1', '--format=%B');
-  assert.match(body, /^AI: 更新问候语/); assert.match(body, /AI-Session: sess-1/); assert.match(body, /AI-Model: m/);
+  assert.match(body, /^DSH: 更新问候语/); assert.match(body, /AI-Session: sess-1/); assert.match(body, /AI-Model: m/); assert.match(body, /AI-Tool: DSH/);
   assert.equal(git(cwd, 'status', '--porcelain'), '');
   assert.equal(seen[0].provider, 'p'); assert.match(seen[1].messages[0].content[0].text, /two/);
   const out = JSON.parse(await h.tools.tgit_ai.execute({ action: 'status' }, { agent: h.agent }));
@@ -76,7 +76,7 @@ test('LLM failure falls back to template; undo requires confirm and reverts', as
   const broken = { async prepareCall() { throw new Error('no route'); } };
   const h = harness(cwd, { llm: broken });
   await turn(h, 1, () => fs.writeFile(path.join(cwd, 'a.txt'), 'two\n'));
-  assert.match(git(cwd, 'log', '-1', '--format=%s'), /^AI: 修改 a\.txt/);
+  assert.match(git(cwd, 'log', '-1', '--format=%s'), /^DSH: 修改 a\.txt/);
   const sha = git(cwd, 'rev-parse', 'HEAD');
   await assert.rejects(h.tools.tgit_ai.execute({ action: 'undo', sha }, { agent: h.agent }), /confirm/);
   const res = JSON.parse(await h.tools.tgit_ai.execute({ action: 'undo', sha, confirm: true }, { agent: h.agent }));
@@ -195,7 +195,7 @@ test('the model judges unknown new artifacts; they are omitted, learned, and for
     await fs.writeFile(path.join(cwd, 'src', 'drv.c'), 'int d;');             // new, flagged, but source code is never omitted
     await fs.mkdir(path.join(cwd, 'out_fw')); await fs.writeFile(path.join(cwd, 'out_fw', 'app.img'), 'x'); await fs.writeFile(path.join(cwd, 'out_fw', 'app.sym'), 'y');
   });
-  assert.match(git(cwd, 'log', '-1', '--format=%s'), /^AI: 新增驱动并编译/);
+  assert.match(git(cwd, 'log', '-1', '--format=%s'), /^DSH: 新增驱动并编译/);
   assert.deepEqual(git(cwd, 'show', '--name-only', '--format=', 'HEAD').split(/\r?\n/).sort(), ['a.txt', 'src/drv.c']);
   const status = await postTo(h, { action: 'status' });
   assert.deepEqual(status.rules.learned.sort(), ['/out_fw/', '/src/cache.dat']);

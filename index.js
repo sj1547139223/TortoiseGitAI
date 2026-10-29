@@ -3,7 +3,7 @@ import { realpath, readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { createHash } from 'node:crypto';
 import { GitService } from './lib/git.js';
-import { generateSummary } from './lib/summary.js';
+import { generateSummary, withTool } from './lib/summary.js';
 import { detectProfiles } from './lib/detect.js';
 import { buildPlan, planTotals, gitignoreText, manualGitignore, normalizeSelection, initBlockedReason, isCodeFile, listDirs } from './lib/init.js';
 import { locateTortoiseGit, openTortoiseGit } from './lib/tgit.js';
@@ -16,6 +16,8 @@ import { locateTortoiseGit, openTortoiseGit } from './lib/tgit.js';
  */
 export const name = 'tortoisegit-ai';
 export const inject = ['tools', 'agents', 'workingDirectory', 'llm', 'webServer', 'connection', 'storageDomain'];
+const TOOL_NAME = 'DSH'; // commit subject prefix: which coding tool made the change
+
 export const Config = z.object({
   enabled: z.boolean().default(true),
   allowedRoots: z.array(z.string()).default([]),
@@ -170,10 +172,11 @@ export function apply(ctx, rawConfig) {
       const candidates = (prepared.created || []).slice(0, 200);
       const summary = await generateSummary({ llm: ctx.llm, route, sessionId: agent.id, request: s.request, diff: prepared.diff, paths: prepared.paths, candidates, timeoutMs: config.summaryTimeoutMs, signal: AbortSignal.any([signal, shutdown.signal]) });
       const omit = summary.generated || [];
-      const result = await git.commit(prepared, summary.message, { sessionId: agent.id, turn, model: route?.model, omit, signal: AbortSignal.any([signal, shutdown.signal]) });
+      const subject = withTool(summary.message, TOOL_NAME);
+      const result = await git.commit(prepared, subject, { sessionId: agent.id, turn, model: route?.model, tool: TOOL_NAME, omit, signal: AbortSignal.any([signal, shutdown.signal]) });
       // Learn only after the commit: changing patterns earlier would invalidate the prepared snapshot.
       const learned = result.status === 'committed' || result.reason === 'excluded_only' ? await learn(baseline.cwd, key, omit, prepared.created || []).catch(() => []) : [];
-      record(agent.id, { ...result, turn, summary: summary.message, summarySource: summary.source, summaryFallbackReason: summary.reason, learned });
+      record(agent.id, { ...result, turn, summary: subject, summarySource: summary.source, summaryFallbackReason: summary.reason, learned });
     } catch (error) { record(agent.id, { status: 'error', reason: message(error), turn }); }
   }
 

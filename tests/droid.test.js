@@ -43,7 +43,7 @@ test('start → stop commits the turn with Droid session trailers and records th
   assert.equal(await store.othersRunning(store.keyOf(cwd), 'someone-else'), true);
   await fs.writeFile(path.join(cwd, 'a.txt'), 'two\n');
   await stop({ session_id: 'droid-s1', stop_hook_active: false }, { summarize: summarize() });
-  assert.match(lastBody(cwd), /^AI: 更新 a\n\nAI-Session: droid-s1\nAI-Turn: 1\nAI-Model: fake-model$/);
+  assert.match(lastBody(cwd), /^Factory: 更新 a\n\nAI-Session: droid-s1\nAI-Turn: 1\nAI-Model: fake-model\nAI-Tool: Factory$/);
   const s = await store.getSession('droid-s1');
   assert.equal(s.outcomes[0].status, 'committed'); assert.equal(s.baseline, null);
   assert.equal(await store.othersRunning(store.keyOf(cwd), 'someone-else'), false);
@@ -141,5 +141,5 @@ test('hook process: silent stdout, recursion guard, template title when droid is
   await fs.writeFile(path.join(cwd, 'a.txt'), 'two\n');
   const b = run('stop', { session_id: 'p', stop_hook_active: false });
   assert.equal(b.status, 0, b.stderr);
-  assert.match(lastBody(cwd), /^AI: 修改 a.txt\n\nAI-Session: p\n/);
+  assert.match(lastBody(cwd), /^Factory: 修改 a.txt\n\nAI-Session: p\n/);
 });

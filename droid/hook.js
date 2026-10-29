@@ -3,6 +3,7 @@ import { realpath } from 'node:fs/promises';
 import { pathToFileURL } from 'node:url';
 import { createRuntime } from './runtime.js';
 import { droidSummary } from './summary.js';
+import { withTool } from '../lib/summary.js';
 import * as store from './store.js';
 
 /**
@@ -59,10 +60,11 @@ export async function stop(input, { runtime, summarize = droidSummary } = {}) {
     const candidates = (prepared.created || []).slice(0, 200);
     const summary = await summarize({ request: s.request, diff: prepared.diff, paths: prepared.paths, candidates, config: rt.config });
     const omit = summary.generated || [];
-    const result = await rt.git.commit(prepared, summary.message, { sessionId: id, turn, model: summary.model || 'template', omit });
+    const subject = withTool(summary.message, 'Factory');
+    const result = await rt.git.commit(prepared, subject, { sessionId: id, turn, model: summary.model || 'template', tool: 'Factory', omit });
     // Learn only after the commit: changing patterns earlier would invalidate the prepared snapshot.
     const learned = result.status === 'committed' || result.reason === 'excluded_only' ? await rt.learn(raw.cwd, key, omit, prepared.created || []).catch(() => []) : [];
-    store.record(s, { ...result, turn, summary: summary.message, summarySource: summary.source, summaryFallbackReason: summary.reason, learned });
+    store.record(s, { ...result, turn, summary: subject, summarySource: summary.source, summaryFallbackReason: summary.reason, learned });
   } catch (e) { store.record(s, { status: 'error', reason: message(e), turn }); }
   finally {
     if (s.repoKey) await store.clearRunning(s.repoKey, id).catch(() => {});
