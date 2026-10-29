@@ -5,7 +5,7 @@ import { createHash } from 'node:crypto';
 import { GitService } from './lib/git.js';
 import { generateSummary } from './lib/summary.js';
 import { detectProfiles } from './lib/detect.js';
-import { buildPlan, planTotals, gitignoreText, initBlockedReason } from './lib/init.js';
+import { buildPlan, planTotals, gitignoreText, initBlockedReason, isCodeFile } from './lib/init.js';
 import { locateTortoiseGit, openTortoiseGit } from './lib/tgit.js';
 
 /**
@@ -28,8 +28,9 @@ export const Config = z.object({
   defaultExcludes: z.boolean().default(true),
 });
 const Request = z.object({
-  action: z.enum(['status', 'log', 'diff', 'open', 'pause', 'resume', 'undo', 'enableRepo', 'disableRepo', 'forgetExclude', 'redetect', 'planRepo', 'initRepo']),
+  action: z.enum(['status', 'log', 'diff', 'open', 'pause', 'resume', 'undo', 'enableRepo', 'disableRepo', 'forgetExclude', 'redetect', 'planRepo', 'initRepo', 'codeOnly']),
   planId: z.string().uuid().optional(),
+  mode: z.enum(['code', 'all']).optional(),
   checked: z.array(z.string().max(12)).max(1000).optional(),
   pattern: z.string().max(500).optional(),
   command: z.enum(['log', 'showcompare', 'repostatus', 'diff', 'blame', 'revisiongraph']).optional(),
@@ -47,7 +48,7 @@ const RepoRecord = z.object({
   detectedAt: z.number().optional(),
 });
 const REPOS_DOMAIN = { name: 'tortoisegit_ai', version: 1, tables: { repos: { valueSchema: RepoRecord } } };
-const UI_ONLY = new Set(['enableRepo', 'disableRepo', 'forgetExclude', 'redetect', 'planRepo', 'initRepo']);
+const UI_ONLY = new Set(['enableRepo', 'disableRepo', 'forgetExclude', 'redetect', 'planRepo', 'initRepo', 'codeOnly']);
 const PLAN_TTL_MS = 15 * 60 * 1000;
 const DETECT_TTL_MS = 10 * 60 * 1000;
 const ROUTE_STATUS = '/api/tortoisegit-ai.status';
@@ -133,10 +134,11 @@ export function apply(ctx, rawConfig) {
   };
   const plans = new Map(); // session id -> pending one-click repository plan
   const planView = plan => {
-    const checked = new Set(plan.entries.filter(e => e.checked).map(e => e.id)), totals = planTotals(plan, checked);
+    const checked = new Set(plan.entries.filter(e => e.checked).map(e => e.id));
+    const view = mode => { const x = planTotals(plan, checked, mode); return { keptFiles: x.keptFiles, keptBytes: x.keptBytes, extensions: x.extensions }; };
     return { planId: plan.id, root: plan.root, profiles: plan.profiles, ai: plan.ai, totalFiles: plan.files.length, totalBytes: plan.files.reduce((n, f) => n + f.size, 0),
-      keptFiles: totals.keptFiles, keptBytes: totals.keptBytes,
-      entries: plan.entries.map(({ id, pattern, source, reason, locked, checked: on, files, bytes, sourceFiles, sample }) => ({ id, pattern: pattern === '(sensitive)' ? '.env / 密钥' : pattern, source, reason, locked, checked: on, files, bytes, sourceFiles, sample })) };
+      modes: { code: view('code'), all: view('all') },
+      entries: plan.entries.map(({ id, pattern, source, reason, locked, checked: on, files, bytes, sourceFiles, codeFiles, sample }) => ({ id, pattern: pattern === '(sensitive)' ? '.env / 密钥' : pattern, source, reason, locked, checked: on, files, bytes, sourceFiles, codeFiles, sample })) };
   };
   const othersRunning = (self, key) => [...running].some(([id, k]) => id !== self && k === key);
 
@@ -200,16 +202,28 @@ export function apply(ctx, rawConfig) {
       const root = await ctx.workingDirectory.ensure(agent, signal);
       if (keyOf(path.resolve(root)) !== keyOf(path.resolve(plan.root))) return { status: 'error', reason: 'plan_expired' };
       if (running.has(agent.id)) return { status: 'error', reason: 'agent_running' };
-      const totals = planTotals(plan, new Set(args.checked || []));
+      const mode = args.mode || 'code';
+      const totals = planTotals(plan, new Set(args.checked || []), mode);
+      if (!totals.keptFiles) return { status: 'error', reason: 'nothing_to_commit' };
       const huge = plan.files.filter(f => f.size >= 100 * 1024 * 1024 && totals.kept.has(f.path));
       if (huge.length) return { status: 'error', reason: `file_too_large: ${huge.slice(0, 3).map(f => f.path).join(', ')}` };
       let existing = ''; try { existing = await readFile(path.join(root, '.gitignore'), 'utf8'); } catch { /* none yet */ }
-      const result = await git.initRepository(root, { gitignore: gitignoreText(totals.entries, existing), message: '初始提交（TortoiseGit AI 一键建仓）' });
+      const result = await git.initRepository(root, { gitignore: gitignoreText(totals.entries, existing, mode), message: '初始提交（TortoiseGit AI 一键建仓）' });
       if (result.status !== 'committed' && result.status !== 'initialized') return result;
       plans.delete(agent.id); s.baseline = null;
       const created = await repoOf(agent, signal);
       if (created.key) { const t = await repoTable(); await t.put(created.key, { ...t.get(created.key), enabled: true, path: created.cwd, updatedAt: Date.now() }); await refreshRepo({ ...created, authorized: true }, { force: true }); }
       return { ok: true, ...result, authorized: true };
+    }
+    if (args.action === 'codeOnly') {
+      if (!repo.cwd) return repo.status;
+      if (running.has(agent.id)) return { status: 'error', reason: 'agent_running' };
+      let existing = ''; try { existing = await readFile(path.join(repo.cwd, '.gitignore'), 'utf8'); } catch { /* none */ }
+      const nonCode = (await git.trackedFiles(repo.cwd)).filter(f => !isCodeFile(f));
+      const whitelisted = existing.split(/\r?\n/).some(l => l.trim() === '!*/');
+      if (!args.confirm) return { ok: true, preview: true, files: nonCode.length, sample: nonCode.slice(0, 12), whitelisted };
+      if (!nonCode.length && whitelisted) return { ok: true, status: 'no_changes' };
+      return git.untrack(repo.cwd, { files: nonCode, gitignore: gitignoreText([], existing, 'code'), message: '仅保留代码相关文件（文档等停止跟踪，文件仍在磁盘）' });
     }
     if (args.action === 'enableRepo' || args.action === 'disableRepo') {
       if (!repo.cwd) return repo.status;

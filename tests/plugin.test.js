@@ -247,6 +247,7 @@ test('one-click repository: plan with rules + AI, user ticks, init + first commi
   const put = async (p, c = 'x') => { await fs.mkdir(path.dirname(path.join(cwd, p)), { recursive: true }); await fs.writeFile(path.join(cwd, p), c); };
   await put('src/main.c', 'int main(){}'); await put('doc/spec.docx', 'PK\0doc'); await put('build/out.o'); await put('code.rar');
   await put('com14_log.txt'); await put('tmp/x.txt'); await put('outputs/a.bin'); await put('.env', 'K=1');
+  await put('README.md', '# r'); await put('esp/sdkconfig', 'C=1'); await put('esp/main/CMakeLists.txt', 'idf_component_register()'); await put('proj/app.uvprojx', '<x/>'); await put('notes.txt'); await put('pic/a.png', 'png');
   const reply = JSON.stringify({ ignore: [{ pattern: '/outputs/', reason: '输出' }, { pattern: '*_log.txt', reason: '串口日志' }, { pattern: 'src/', reason: '误判' }, { pattern: '**', reason: '全部' }] });
   const h = harness(cwd, { roots: [], llm: fakeLlm(reply) });
   const status = await postTo(h, { action: 'status' });
@@ -262,13 +263,36 @@ test('one-click repository: plan with rules + AI, user ticks, init + first commi
   assert.equal((await postTo(h, { action: 'initRepo', planId: '00000000-0000-4000-8000-000000000000', checked })).reason, 'plan_expired');
   const done = await postTo(h, { action: 'initRepo', planId: plan.planId, checked });
   assert.equal(done.status, 'committed');
-  assert.deepEqual(git(cwd, 'ls-files').split(/\r?\n/).sort(), ['.gitignore', 'doc/spec.docx', 'src/main.c']);
+  const files = git(cwd, 'ls-files').split(/\r?\n/).sort();
+  assert.deepEqual(files, ['.gitignore', 'esp/main/CMakeLists.txt', 'esp/sdkconfig', 'proj/app.uvprojx', 'src/main.c']);
+  assert.equal(plan.modes.code.keptFiles + 1, files.length); // preview matches what Git really took (+ the new .gitignore)
+  assert.ok(plan.modes.all.keptFiles > plan.modes.code.keptFiles);
   assert.match(await fs.readFile(path.join(cwd, '.gitignore'), 'utf8'), /\/outputs\/[\s\S]*\*_log\.txt/);
   assert.equal(git(cwd, 'status', '--porcelain'), '');
   const after = await postTo(h, { action: 'status' });
   assert.equal(after.authorized, true); assert.equal(after.noRepo, undefined);
   // Auto-commit works right away in the new repository.
-  await turn(h, 1, () => fs.writeFile(path.join(cwd, 'src', 'main.c'), 'int main(){return 0;}'));
+  await turn(h, 1, async () => { await fs.writeFile(path.join(cwd, 'src', 'main.c'), 'int main(){return 0;}'); await fs.writeFile(path.join(cwd, 'CHANGELOG.md'), 'x'); });
+  assert.deepEqual(git(cwd, 'show', '--name-only', '--format=', 'HEAD').split(/\r?\n/), ['src/main.c']);
   assert.equal(git(cwd, 'rev-list', '--count', 'HEAD'), '2');
   assert.equal((await postTo(h, { action: 'planRepo' })).reason, 'already_repository');
+});
+
+test('an existing repository can be switched to code-only (files stay on disk)', async t => {
+  const cwd = await repo(t);
+  await fs.mkdir(path.join(cwd, 'doc')); await fs.writeFile(path.join(cwd, 'doc', 'spec.docx'), 'PK'); await fs.writeFile(path.join(cwd, 'README.md'), '# r');
+  await fs.writeFile(path.join(cwd, 'main.c'), 'int m;'); git(cwd, 'add', '.'); git(cwd, 'commit', '-q', '-m', 'all');
+  const h = harness(cwd);
+  const preview = await postTo(h, { action: 'codeOnly' });
+  assert.deepEqual(preview.sample.sort(), ['README.md', 'a.txt', 'doc/spec.docx']);
+  await fs.writeFile(path.join(cwd, 'main.c'), 'int n;');
+  assert.equal((await postTo(h, { action: 'codeOnly', confirm: true })).reason, 'dirty_worktree');
+  git(cwd, 'checkout', '--', 'main.c');
+  const done = await postTo(h, { action: 'codeOnly', confirm: true });
+  assert.equal(done.status, 'committed'); assert.equal(done.warning, undefined);
+  assert.deepEqual(git(cwd, 'ls-files').split(/\r?\n/).sort(), ['.gitignore', 'main.c']);
+  assert.equal(await fs.readFile(path.join(cwd, 'README.md'), 'utf8'), '# r');
+  assert.equal(git(cwd, 'status', '--porcelain'), '');
+  assert.equal((await postTo(h, { action: 'codeOnly' })).whitelisted, true);
+  await assert.rejects(h.tools.tgit_ai.execute({ action: 'codeOnly', confirm: true }, { agent: h.agent }), /only the user|nvalid/);
 });

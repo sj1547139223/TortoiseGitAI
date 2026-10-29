@@ -18,6 +18,7 @@ DeepSeek Harness 插件：AI 每完成一轮修改，自动把**本轮改动**�
   - 撤销只用 `git revert`，并且需要确认。
 - **界面**：输入框下方状态栏里的小标签（绿点 + 最新提交号；未启用的仓库显示"未启用"，非 git 目录显示"未建仓库"，盘符根目录/用户目录/系统目录不显示）。点开弹出面板：按仓库启用/停用、本会话开关、日志/工作区/版本图（打开 TortoiseGit）、本会话 AI 提交列表（对比、撤销，撤销需二次确认）。
 - **一键建仓**：非 git 目录点"一键新建仓库"→ 扫描目录（内置产物规则 + 工具链识别 + 压缩包/临时目录 + 20 MB 以上大文件 + 会话模型给出的忽略建议）→ 列出每条 .gitignore 规则会忽略的文件数和大小，可取消勾选（AI 建议若会忽略源码/文档类文件则默认不勾）→ `git init`、写 .gitignore、初始提交、开启自动提交。已有 .gitignore 只追加缺失行；单个文件超过 100 MB 拒绝；未配置 Git 用户名/邮箱会提示去 TortoiseGit 设置。
+- **仅代码模式**（建仓默认）：.gitignore 先忽略全部再放行代码类型（`lib/init.js` 的 `CODE_EXTENSIONS`/`CODE_NAMES`：C/C++/汇编/链接脚本、Python/JS 等、构建脚本、Keil/IAR/CubeMX/VS 工程文件、json/yaml/ini/sdkconfig/Kconfig 等代码配置），md/docx/xls/pdf/txt/图片/压缩包都不纳入，以后新建的文档也不会被自动提交。已有仓库可在面板点"仅保留代码文件"：预览后把非代码文件停止跟踪（`git rm --cached`，文件留在磁盘）并写入规则，作为一次提交；要求工作区干净。
 - **AI 工具** `tgit_ai`：可执行 `status`、`log`、`diff`、`open`、`pause`、`resume`、`undo`（撤销需传 `confirm:true`，并且只应在用户明确要求时调用）。
 
 ## 配置（cordis.patch.yml）
