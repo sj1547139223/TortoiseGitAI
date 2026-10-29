@@ -232,3 +232,43 @@ test('judge replies are parsed defensively', async () => {
   assert.deepEqual(parseJudge('{bad json', ['a.o']).generated, []);
   assert.deepEqual(parseJudge('{"title":"t","generated":["commands/x.mjs","src/main.c","docs/a.md","out/fw.bin"]}', ['commands/x.mjs', 'src/main.c', 'docs/a.md', 'out/fw.bin']).generated, ['out/fw.bin']);
 });
+
+test('one-click repository: plan with rules + AI, user ticks, init + first commit + enabled', async t => {
+  const { initBlockedReason } = await import('../lib/init.js');
+  assert.equal(initBlockedReason(os.homedir()), 'home_directory');
+  assert.equal(initBlockedReason(path.parse(process.cwd()).root), 'drive_root');
+  const base = process.env.TGAI_TEST_ROOT || path.parse(process.cwd()).root;
+  const cwd = await fs.realpath(await fs.mkdtemp(path.join(base, 'tgai-init-')));
+  t.after(() => fs.rm(cwd, { recursive: true, force: true, maxRetries: 5 }));
+  const gcfg = path.join(cwd, '..', `${path.basename(cwd)}.gitconfig`);
+  await fs.writeFile(gcfg, '[user]\n\tname = T\n\temail = t@example.invalid\n[core]\n\tautocrlf = false\n[commit]\n\tgpgsign = false\n');
+  const prev = process.env.GIT_CONFIG_GLOBAL; process.env.GIT_CONFIG_GLOBAL = gcfg;
+  t.after(() => { if (prev === undefined) delete process.env.GIT_CONFIG_GLOBAL; else process.env.GIT_CONFIG_GLOBAL = prev; return fs.rm(gcfg, { force: true }); });
+  const put = async (p, c = 'x') => { await fs.mkdir(path.dirname(path.join(cwd, p)), { recursive: true }); await fs.writeFile(path.join(cwd, p), c); };
+  await put('src/main.c', 'int main(){}'); await put('doc/spec.docx', 'PK\0doc'); await put('build/out.o'); await put('code.rar');
+  await put('com14_log.txt'); await put('tmp/x.txt'); await put('outputs/a.bin'); await put('.env', 'K=1');
+  const reply = JSON.stringify({ ignore: [{ pattern: '/outputs/', reason: '输出' }, { pattern: '*_log.txt', reason: '串口日志' }, { pattern: 'src/', reason: '误判' }, { pattern: '**', reason: '全部' }] });
+  const h = harness(cwd, { roots: [], llm: fakeLlm(reply) });
+  const status = await postTo(h, { action: 'status' });
+  assert.equal(status.noRepo, true); assert.equal(status.initBlocked, null);
+  await assert.rejects(h.tools.tgit_ai.execute({ action: 'planRepo' }, { agent: h.agent }), /only the user|Invalid|invalid/);
+  const plan = await postTo(h, { action: 'planRepo' });
+  const by = p => plan.entries.find(e => e.pattern === p);
+  assert.ok(by('build/').locked); assert.ok(by('*.rar').checked); assert.ok(by('tmp/').checked);
+  assert.equal(by('/outputs/').source, 'ai'); assert.ok(by('/outputs/').checked); assert.ok(by('*_log.txt').checked);
+  assert.equal(by('src/').checked, false); assert.equal(by('src/').sourceFiles, 1);
+  assert.equal(by('**'), undefined); assert.ok(by('.env / 密钥').locked);
+  const checked = plan.entries.filter(e => e.checked).map(e => e.id);
+  assert.equal((await postTo(h, { action: 'initRepo', planId: '00000000-0000-4000-8000-000000000000', checked })).reason, 'plan_expired');
+  const done = await postTo(h, { action: 'initRepo', planId: plan.planId, checked });
+  assert.equal(done.status, 'committed');
+  assert.deepEqual(git(cwd, 'ls-files').split(/\r?\n/).sort(), ['.gitignore', 'doc/spec.docx', 'src/main.c']);
+  assert.match(await fs.readFile(path.join(cwd, '.gitignore'), 'utf8'), /\/outputs\/[\s\S]*\*_log\.txt/);
+  assert.equal(git(cwd, 'status', '--porcelain'), '');
+  const after = await postTo(h, { action: 'status' });
+  assert.equal(after.authorized, true); assert.equal(after.noRepo, undefined);
+  // Auto-commit works right away in the new repository.
+  await turn(h, 1, () => fs.writeFile(path.join(cwd, 'src', 'main.c'), 'int main(){return 0;}'));
+  assert.equal(git(cwd, 'rev-list', '--count', 'HEAD'), '2');
+  assert.equal((await postTo(h, { action: 'planRepo' })).reason, 'already_repository');
+});

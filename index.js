@@ -1,10 +1,11 @@
 import { z } from 'zod';
-import { realpath } from 'node:fs/promises';
+import { realpath, readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { createHash } from 'node:crypto';
 import { GitService } from './lib/git.js';
 import { generateSummary } from './lib/summary.js';
 import { detectProfiles } from './lib/detect.js';
+import { buildPlan, planTotals, gitignoreText, initBlockedReason } from './lib/init.js';
 import { locateTortoiseGit, openTortoiseGit } from './lib/tgit.js';
 
 /**
@@ -27,7 +28,9 @@ export const Config = z.object({
   defaultExcludes: z.boolean().default(true),
 });
 const Request = z.object({
-  action: z.enum(['status', 'log', 'diff', 'open', 'pause', 'resume', 'undo', 'enableRepo', 'disableRepo', 'forgetExclude', 'redetect']),
+  action: z.enum(['status', 'log', 'diff', 'open', 'pause', 'resume', 'undo', 'enableRepo', 'disableRepo', 'forgetExclude', 'redetect', 'planRepo', 'initRepo']),
+  planId: z.string().uuid().optional(),
+  checked: z.array(z.string().max(12)).max(1000).optional(),
   pattern: z.string().max(500).optional(),
   command: z.enum(['log', 'showcompare', 'repostatus', 'diff', 'blame', 'revisiongraph']).optional(),
   sha: z.string().regex(/^[a-f0-9]{7,64}$/i).optional(),
@@ -44,7 +47,8 @@ const RepoRecord = z.object({
   detectedAt: z.number().optional(),
 });
 const REPOS_DOMAIN = { name: 'tortoisegit_ai', version: 1, tables: { repos: { valueSchema: RepoRecord } } };
-const UI_ONLY = new Set(['enableRepo', 'disableRepo', 'forgetExclude', 'redetect']);
+const UI_ONLY = new Set(['enableRepo', 'disableRepo', 'forgetExclude', 'redetect', 'planRepo', 'initRepo']);
+const PLAN_TTL_MS = 15 * 60 * 1000;
 const DETECT_TTL_MS = 10 * 60 * 1000;
 const ROUTE_STATUS = '/api/tortoisegit-ai.status';
 const ROUTE_ACTION = '/api/tortoisegit-ai.action';
@@ -127,6 +131,13 @@ export function apply(ctx, rawConfig) {
     const key = keyOf(await realpath(status.cwd));
     return { cwd: status.cwd, key, status, authorized: await isAuthorized(key) };
   };
+  const plans = new Map(); // session id -> pending one-click repository plan
+  const planView = plan => {
+    const checked = new Set(plan.entries.filter(e => e.checked).map(e => e.id)), totals = planTotals(plan, checked);
+    return { planId: plan.id, root: plan.root, profiles: plan.profiles, ai: plan.ai, totalFiles: plan.files.length, totalBytes: plan.files.reduce((n, f) => n + f.size, 0),
+      keptFiles: totals.keptFiles, keptBytes: totals.keptBytes,
+      entries: plan.entries.map(({ id, pattern, source, reason, locked, checked: on, files, bytes, sourceFiles, sample }) => ({ id, pattern: pattern === '(sensitive)' ? '.env / 密钥' : pattern, source, reason, locked, checked: on, files, bytes, sourceFiles, sample })) };
+  };
   const othersRunning = (self, key) => [...running].some(([id, k]) => id !== self && k === key);
 
   async function start(agent, payload) {
@@ -172,6 +183,34 @@ export function apply(ctx, rawConfig) {
       return { ok: true, enabled: s.enabled };
     }
     const repo = await repoOf(agent, signal);
+    if (args.action === 'planRepo') {
+      if (repo.cwd) return { status: 'error', reason: 'already_repository' };
+      if (!repo.status?.noRepo) return repo.status;
+      const root = await ctx.workingDirectory.ensure(agent, signal);
+      const route = agent.session?.requestHeader?.()?.config;
+      const plan = await buildPlan(root, { llm: ctx.llm, route, sessionId: agent.id, signal, timeoutMs: 25000 });
+      if (plan.status !== 'ready') return { status: 'error', reason: plan.reason, files: plan.files };
+      plans.set(agent.id, plan);
+      return { ok: true, ...planView(plan) };
+    }
+    if (args.action === 'initRepo') {
+      const plan = plans.get(agent.id);
+      if (!plan || plan.id !== args.planId || Date.now() - plan.createdAt > PLAN_TTL_MS) return { status: 'error', reason: 'plan_expired' };
+      if (repo.cwd) return { status: 'error', reason: 'already_repository' };
+      const root = await ctx.workingDirectory.ensure(agent, signal);
+      if (keyOf(path.resolve(root)) !== keyOf(path.resolve(plan.root))) return { status: 'error', reason: 'plan_expired' };
+      if (running.has(agent.id)) return { status: 'error', reason: 'agent_running' };
+      const totals = planTotals(plan, new Set(args.checked || []));
+      const huge = plan.files.filter(f => f.size >= 100 * 1024 * 1024 && totals.kept.has(f.path));
+      if (huge.length) return { status: 'error', reason: `file_too_large: ${huge.slice(0, 3).map(f => f.path).join(', ')}` };
+      let existing = ''; try { existing = await readFile(path.join(root, '.gitignore'), 'utf8'); } catch { /* none yet */ }
+      const result = await git.initRepository(root, { gitignore: gitignoreText(totals.entries, existing), message: '初始提交（TortoiseGit AI 一键建仓）' });
+      if (result.status !== 'committed' && result.status !== 'initialized') return result;
+      plans.delete(agent.id); s.baseline = null;
+      const created = await repoOf(agent, signal);
+      if (created.key) { const t = await repoTable(); await t.put(created.key, { ...t.get(created.key), enabled: true, path: created.cwd, updatedAt: Date.now() }); await refreshRepo({ ...created, authorized: true }, { force: true }); }
+      return { ok: true, ...result, authorized: true };
+    }
     if (args.action === 'enableRepo' || args.action === 'disableRepo') {
       if (!repo.cwd) return repo.status;
       const enabled = args.action === 'enableRepo';
@@ -196,6 +235,7 @@ export function apply(ctx, rawConfig) {
     if (args.action === 'status') {
       const rec = repo.key ? (await repoTable()).get(repo.key) : undefined;
       return { ok: true, enabled: s.enabled && config.enabled, authorized: !!repo.authorized, running: running.has(agent.id), git: repo.status,
+        ...(repo.status?.noRepo ? { noRepo: true, cwd: repo.status.cwd, initBlocked: initBlockedReason(repo.status.cwd) } : {}),
         rules: { profiles: rec?.profiles || [], detected: rec?.detected || [], learned: rec?.learned || [], custom: config.excludes, builtIn: config.defaultExcludes },
         history: repo.cwd ? await git.log(repo.cwd, { limit: args.limit || 20, sessionId: agent.id }) : { status: 'ok', commits: [] },
         outcomes: s.outcomes.slice(0, 10), tgitPath: await executable() };

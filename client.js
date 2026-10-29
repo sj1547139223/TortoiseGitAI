@@ -4,8 +4,8 @@ window.__ModuleLoader__.load({
     const React = require('react');
     const h = React.createElement;
     const NS = 'tortoisegit-ai';
-    const zh = { title: '小乌龟 AI 版本记录', notEnabled: '未启用', enableRepo: '在此仓库启用自动提交', disableRepo: '在此仓库停用', enableHint: '启用后，AI 每轮修改结束会自动提交到当前分支（只提交 AI 本轮的改动；轮次开始时有未提交修改则跳过）。', sessionOn: '本会话自动提交：开', sessionOff: '本会话自动提交：关', refresh: '刷新', log: '日志', compare: '对比', status: '工作区', graph: '版本图', undo: '撤销', cancel: '取消', confirm: '确认撤销', warning: '将创建一个新的 revert 提交，原有历史保留。', empty: '本会话暂无 AI 提交。', failed: '操作失败', latest: '最近结果', history: '本会话 AI 提交', native: '打开 TortoiseGit 原生窗口', committed: '已提交', skipped: '已跳过', error: '出错', reverted: '已撤销', conflict: '撤销冲突', close: '关闭', rules: '不自动提交的文件', detected: '识别到的工程', none: '未识别到特定工具链（使用内置清单 + .gitignore）', learned: 'AI 判定的产物', forget: '恢复提交', redetect: '重新识别', patterns: '条规则', omitted: '已排除产物' };
-    const en = { title: 'TortoiseGit AI history', notEnabled: 'Off', enableRepo: 'Enable auto-commit for this repository', disableRepo: 'Disable for this repository', enableHint: 'When enabled, each AI turn that edits files is committed to the current branch (only the AI\'s own changes; turns that start with uncommitted changes are skipped).', sessionOn: 'Session auto-commit: on', sessionOff: 'Session auto-commit: off', refresh: 'Refresh', log: 'Log', compare: 'Compare', status: 'Working tree', graph: 'Graph', undo: 'Revert', cancel: 'Cancel', confirm: 'Confirm revert', warning: 'Creates a new revert commit; history is kept.', empty: 'No AI commits in this session yet.', failed: 'Operation failed', latest: 'Latest', history: 'AI commits in this session', native: 'Opens a native TortoiseGit window', committed: 'Committed', skipped: 'Skipped', error: 'Error', reverted: 'Reverted', conflict: 'Revert conflict', close: 'Close', rules: 'Never auto-committed', detected: 'Detected projects', none: 'No specific toolchain detected (built-in list + .gitignore)', learned: 'Judged artifacts (AI)', forget: 'Commit again', redetect: 'Re-detect', patterns: 'rules', omitted: 'Artifacts excluded' };
+    const zh = { title: '小乌龟 AI 版本记录', notEnabled: '未启用', enableRepo: '在此仓库启用自动提交', disableRepo: '在此仓库停用', enableHint: '启用后，AI 每轮修改结束会自动提交到当前分支（只提交 AI 本轮的改动；轮次开始时有未提交修改则跳过）。', sessionOn: '本会话自动提交：开', sessionOff: '本会话自动提交：关', refresh: '刷新', log: '日志', compare: '对比', status: '工作区', graph: '版本图', undo: '撤销', cancel: '取消', confirm: '确认撤销', warning: '将创建一个新的 revert 提交，原有历史保留。', empty: '本会话暂无 AI 提交。', failed: '操作失败', latest: '最近结果', history: '本会话 AI 提交', native: '打开 TortoiseGit 原生窗口', committed: '已提交', skipped: '已跳过', error: '出错', reverted: '已撤销', conflict: '撤销冲突', close: '关闭', rules: '不自动提交的文件', detected: '识别到的工程', none: '未识别到特定工具链（使用内置清单 + .gitignore）', learned: 'AI 判定的产物', forget: '恢复提交', redetect: '重新识别', patterns: '条规则', omitted: '已排除产物', noRepo: '未建仓库', initHint: '当前目录还不是 Git 仓库。一键新建会先分析目录（内置规则 + 识别工具链 + AI 检查），列出要忽略的文件供你确认，然后建仓库、做初始提交并开启自动提交。', initStart: '一键新建仓库', analyzing: '正在分析目录…（AI 检查需要忽略的文件，约 10–30 秒）', initBlocked: '这个目录不适合自动建仓库', blocked_drive_root: '盘符根目录', blocked_home_directory: '用户主目录', blocked_user_folder: '桌面/文档/下载等用户目录', blocked_system_folder: '系统或程序目录', too_many_files: '文件太多（超过 5 万个），可能不是工程目录', ignoreList: '将写入 .gitignore（可取消勾选）', willCommit: '初始提交约', ignored: '忽略', files: '个文件', aiFailed: 'AI 建议不可用，仅使用规则', aiTag: 'AI', sourceWarn: '含源码/文档类文件，默认不忽略', create: '创建仓库并初始提交', creating: '正在创建…', identity: '未配置 Git 用户名/邮箱：请在 TortoiseGit 设置 → Git 中填写后重试。', dirLabel: '目录' };
+    const en = { title: 'TortoiseGit AI history', notEnabled: 'Off', enableRepo: 'Enable auto-commit for this repository', disableRepo: 'Disable for this repository', enableHint: 'When enabled, each AI turn that edits files is committed to the current branch (only the AI\'s own changes; turns that start with uncommitted changes are skipped).', sessionOn: 'Session auto-commit: on', sessionOff: 'Session auto-commit: off', refresh: 'Refresh', log: 'Log', compare: 'Compare', status: 'Working tree', graph: 'Graph', undo: 'Revert', cancel: 'Cancel', confirm: 'Confirm revert', warning: 'Creates a new revert commit; history is kept.', empty: 'No AI commits in this session yet.', failed: 'Operation failed', latest: 'Latest', history: 'AI commits in this session', native: 'Opens a native TortoiseGit window', committed: 'Committed', skipped: 'Skipped', error: 'Error', reverted: 'Reverted', conflict: 'Revert conflict', close: 'Close', rules: 'Never auto-committed', detected: 'Detected projects', none: 'No specific toolchain detected (built-in list + .gitignore)', learned: 'Judged artifacts (AI)', forget: 'Commit again', redetect: 'Re-detect', patterns: 'rules', omitted: 'Artifacts excluded', noRepo: 'No repo', initHint: 'This folder is not a Git repository yet. One click analyses it (built-in rules, toolchain detection, AI review), lists what will be ignored for you to confirm, then creates the repository, makes the first commit and enables auto-commit.', initStart: 'Create repository', analyzing: 'Analysing folder… (AI review, ~10–30 s)', initBlocked: 'Not a suitable folder for a repository', blocked_drive_root: 'drive root', blocked_home_directory: 'home folder', blocked_user_folder: 'Desktop/Documents/Downloads', blocked_system_folder: 'system or program folder', too_many_files: 'too many files (over 50k)', ignoreList: 'Written to .gitignore (untick to keep)', willCommit: 'First commit ≈', ignored: 'ignored', files: 'files', aiFailed: 'AI suggestions unavailable; rules only', aiTag: 'AI', sourceWarn: 'contains source/doc files; not ignored by default', create: 'Create repository and commit', creating: 'Creating…', identity: 'Git user name/email missing: set them in TortoiseGit Settings → Git, then retry.', dirLabel: 'Folder' };
     const css = `.tgai-wrap{position:relative;display:inline-flex}
 .tgai-pill{display:inline-flex;align-items:center;gap:5px;font:inherit;font-size:12px;line-height:20px;color:var(--dsw-alias-label-secondary);background:transparent;border:0;border-radius:6px;padding:2px 6px;cursor:pointer;white-space:nowrap}
 .tgai-pill:hover,.tgai-pill[aria-expanded=true]{background:var(--dsw-alias-bg-layer-2);color:var(--dsw-alias-label-primary)}
@@ -30,6 +30,10 @@ window.__ModuleLoader__.load({
 .tgai-chip{display:inline-flex;align-items:center;gap:2px;padding:0 6px;border-radius:10px;background:var(--dsw-alias-bg-layer-2);font-family:var(--dsw-alias-font-mono,monospace);font-size:11px}
 .tgai-pop .tgai-chip button{border:0;background:transparent;padding:0 2px;font-size:11px}
 .tgai-pop details summary{cursor:pointer;color:var(--dsw-alias-label-secondary)}
+.tgai-plan{max-height:240px;overflow:auto;border:1px solid var(--dsw-alias-border-l1);border-radius:6px;padding:4px 6px;margin:4px 0}
+.tgai-plan label{display:flex;gap:6px;align-items:flex-start;padding:2px 0;cursor:pointer}
+.tgai-plan label[data-locked=true]{cursor:default;opacity:.75}
+.tgai-tag{font-size:10px;padding:0 4px;border-radius:4px;background:var(--dsw-alias-brand-primary);color:#fff}
 .tgai-confirm{padding:6px 8px;margin-top:4px;background:var(--dsw-alias-bg-layer-2);border-radius:6px}`;
     const api = async (path, init) => {
       const response = await fetch(path, { credentials: 'same-origin', cache: 'no-store', ...init });
@@ -52,6 +56,9 @@ window.__ModuleLoader__.load({
           const [busy, setBusy] = React.useState(false);
           const [error, setError] = React.useState('');
           const [confirmation, setConfirmation] = React.useState(null);
+          const [plan, setPlan] = React.useState(null);
+          const [picked, setPicked] = React.useState(null);
+          const [phase, setPhase] = React.useState('');
           const alive = React.useRef(true);
           const wrap = React.useRef(null);
           const refresh = React.useCallback(async () => {
@@ -81,7 +88,64 @@ window.__ModuleLoader__.load({
             } catch (e) { if (alive.current) setError(String(e.message || e)); }
             finally { if (alive.current) { setBusy(false); setConfirmation(null); } }
           }
-          if (!data || data.git?.status !== 'ok') return null; // not a git repository: show nothing
+          const human = n => n >= 1 << 30 ? `${(n / (1 << 30)).toFixed(1)} GB` : n >= 1 << 20 ? `${(n / (1 << 20)).toFixed(1)} MB` : n >= 1024 ? `${Math.round(n / 1024)} KB` : `${n} B`;
+          const post = body => api('api/tortoisegit-ai.action', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ session: sessionId, ...body }) });
+          async function startPlan() {
+            setPhase('analyzing'); setError(''); setPlan(null);
+            try {
+              const value = await post({ action: 'planRepo' });
+              if (value.status === 'error') throw new Error(t(value.reason) !== value.reason ? t(value.reason) : value.reason);
+              if (alive.current) { setPlan(value); setPicked(new Set(value.entries.filter(e => e.checked).map(e => e.id))); }
+            } catch (e) { if (alive.current) setError(String(e.message || e)); }
+            finally { if (alive.current) setPhase(''); }
+          }
+          async function createRepo() {
+            setPhase('creating'); setError('');
+            try {
+              const value = await post({ action: 'initRepo', planId: plan.planId, checked: [...picked] });
+              if (value.status === 'error' || value.status === 'skipped') throw new Error(value.reason === 'git_identity_missing' ? t('identity') : (value.error || value.reason));
+              if (alive.current) { setPlan(null); setPicked(null); }
+              await refresh();
+            } catch (e) { if (alive.current) setError(String(e.message || e)); }
+            finally { if (alive.current) setPhase(''); }
+          }
+          if (data?.noRepo && data.initBlocked && !open) return null; // home/system folders: stay out of the way
+          if (data?.noRepo) {
+            const toggle = id => setPicked(prev => { const next = new Set(prev); if (next.has(id)) next.delete(id); else next.add(id); return next; });
+            let approx = 0;
+            if (plan && picked) {
+              approx = plan.keptFiles;
+              for (const e of plan.entries) { if (e.locked) continue; if (e.checked && !picked.has(e.id)) approx += e.files; if (!e.checked && picked.has(e.id)) approx -= e.files; }
+              approx = Math.max(0, Math.min(plan.totalFiles, approx));
+            }
+            const labels = list => [...new Set(list.map(p => (p.dir ? `${p.label} (${p.dir})` : p.label)))].join(', ');
+            const initPanel = h('div', { className: 'tgai-pop', role: 'dialog', 'aria-label': t('title') },
+              h('div', { className: 'tgai-row tgai-head' }, h('strong', null, t('title')),
+                h('button', { type: 'button', className: 'tgai-x', 'aria-label': t('close'), onClick: () => setOpen(false) }, '×')),
+              h('p', null, h('small', null, `${t('dirLabel')}: `), h('code', null, data.cwd || '')),
+              data.initBlocked ? h('p', { className: 'tgai-error' }, `${t('initBlocked')}（${t(`blocked_${data.initBlocked}`)}）`)
+              : !plan ? h(React.Fragment, null, h('p', null, h('small', null, t('initHint'))),
+                  h('div', { className: 'tgai-row' }, h('button', { type: 'button', className: 'tgai-primary', disabled: !!phase, onClick: startPlan }, phase === 'analyzing' ? t('analyzing') : t('initStart'))))
+              : h(React.Fragment, null,
+                  plan.profiles?.length ? h('p', null, h('small', null, `${t('detected')}: ${labels(plan.profiles)}`)) : null,
+                  plan.ai?.status === 'failed' ? h('p', null, h('small', null, `${t('aiFailed')} (${plan.ai.reason})`)) : null,
+                  h('div', { className: 'tgai-section' }, t('ignoreList')),
+                  h('div', { className: 'tgai-plan' }, plan.entries.map(e => h('label', { key: e.id, 'data-locked': String(!!e.locked), title: e.sample.join('\n') },
+                    h('input', { type: 'checkbox', checked: e.locked || picked.has(e.id), disabled: e.locked || !!phase, onChange: () => toggle(e.id) }),
+                    h('span', null, h('code', null, e.pattern), ' ', e.source === 'ai' ? h('span', { className: 'tgai-tag' }, t('aiTag')) : null, ' ',
+                      h('small', null, `${e.reason} · ${e.files} ${t('files')} · ${human(e.bytes)}`),
+                      e.sourceFiles ? h('small', { className: 'tgai-error', style: { display: 'block' } }, `${t('sourceWarn')} (${e.sourceFiles})`) : null)))),
+                  h('p', null, `${t('willCommit')} ${approx} ${t('files')}，${t('ignored')} ${plan.totalFiles - approx} / ${plan.totalFiles}`),
+                  h('div', { className: 'tgai-row' },
+                    h('button', { type: 'button', className: 'tgai-primary', disabled: !!phase, onClick: createRepo }, phase === 'creating' ? t('creating') : t('create')),
+                    h('button', { type: 'button', disabled: !!phase, onClick: () => { setPlan(null); setPicked(null); } }, t('cancel')))),
+              error ? h('p', { className: 'tgai-error', role: 'alert' }, error) : null);
+            return h('span', { className: 'tgai-wrap', ref: wrap }, h('style', null, css),
+              h('button', { type: 'button', className: 'tgai-pill', 'aria-expanded': open, 'aria-haspopup': 'dialog', title: t('title'), onClick: () => setOpen(v => !v) },
+                icon, h('span', { className: 'tgai-dot', 'data-on': 'false' }), t('noRepo')),
+              open ? initPanel : null);
+          }
+          if (!data || data.git?.status !== 'ok') return null; // git unavailable: show nothing
           const commits = data.history?.commits || [];
           const latest = data.outcomes?.[0];
           const on = data.authorized && data.enabled;
