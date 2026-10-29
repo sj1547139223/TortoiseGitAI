@@ -333,3 +333,34 @@ test('a UTF-8 BOM in an existing .gitignore does not break its first rule', asyn
     assert.ok(!text.includes('\uFEFF')); assert.match(text, /^node_modules\/$/m);
   }
 });
+
+test('folder picker first: list one level, scan only the selection, skip artifact folders, nested repos left out', async t => {
+  const base = process.env.TGAI_TEST_ROOT || path.parse(process.cwd()).root;
+  const cwd = await fs.realpath(await fs.mkdtemp(path.join(base, 'tgai-pick-')));
+  t.after(() => fs.rm(cwd, { recursive: true, force: true, maxRetries: 5 }));
+  const gcfg = `${cwd}.gitconfig`;
+  await fs.writeFile(gcfg, '[user]\n\tname = T\n\temail = t@example.invalid\n[core]\n\tautocrlf = false\n[commit]\n\tgpgsign = false\n');
+  const prev = process.env.GIT_CONFIG_GLOBAL; process.env.GIT_CONFIG_GLOBAL = gcfg;
+  t.after(() => { if (prev === undefined) delete process.env.GIT_CONFIG_GLOBAL; else process.env.GIT_CONFIG_GLOBAL = prev; return fs.rm(gcfg, { force: true }); });
+  const put = async (p, c = 'x') => { await fs.mkdir(path.dirname(path.join(cwd, p)), { recursive: true }); await fs.writeFile(path.join(cwd, p), c); };
+  for (const p of ['app/main.c', 'app/README.md', 'app/node_modules/m/index.js', 'app/build/x.c', 'app/lib/ext/.git/HEAD', 'app/lib/ext/e.c', 'app/lib/own.c', 'huge/a.c', 'notes.md']) await put(p);
+  const h = harness(cwd, { roots: [], llm: fakeLlm('{"ignore":[]}') });
+  const top = await postTo(h, { action: 'listDirs' });
+  assert.deepEqual(top.dirs.map(d => d.name), ['app', 'huge']); assert.equal(top.files, 1);
+  const lib = await postTo(h, { action: 'listDirs', dir: 'app/lib' });
+  assert.equal(lib.dirs.find(d => d.name === 'ext').nestedRepo, true);
+  assert.equal((await postTo(h, { action: 'listDirs', dir: 'app' })).dirs.find(d => d.name === 'node_modules').artifact, true);
+  assert.equal((await postTo(h, { action: 'listDirs', dir: '../..' })).error, 'invalid_dir');
+  assert.equal((await postTo(h, { action: 'planRepo', selection: [] })).reason, 'nothing_selected');
+  const plan = await postTo(h, { action: 'planRepo', selection: [{ dir: 'app', auto: true }] });
+  assert.equal(plan.totalFiles, 3, 'only app/ is scanned, node_modules/build and the nested repo are not listed');
+  assert.ok(plan.skippedCount >= 2); assert.ok(plan.entries.some(e => e.source === 'nested' && e.pattern === '/app/lib/ext/'));
+  const checked = plan.entries.filter(e => e.checked).map(e => e.id);
+  const preview = await postTo(h, { action: 'planPreview', planId: plan.planId, checked });
+  const done = await postTo(h, { action: 'initRepo', planId: plan.planId, checked });
+  assert.equal(done.status, 'committed', JSON.stringify(done));
+  const files = git(cwd, 'ls-files').split(/\r?\n/).sort();
+  assert.deepEqual(files, ['.gitignore', 'app/lib/own.c', 'app/main.c']);
+  assert.equal(preview.keptFiles + 1, files.length);
+  assert.equal(git(cwd, 'status', '--porcelain'), '');
+});

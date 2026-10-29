@@ -4,8 +4,8 @@ window.__ModuleLoader__.load({
     const React = require('react');
     const h = React.createElement;
     const NS = 'tortoisegit-ai';
-    const zh = { title: '小乌龟 AI 版本记录', notEnabled: '未启用', enableRepo: '在此仓库启用自动提交', disableRepo: '在此仓库停用', enableHint: '启用后，AI 每轮修改结束会自动提交到当前分支（只提交 AI 本轮的改动；轮次开始时有未提交修改则跳过）。', sessionOn: '本会话自动提交：开', sessionOff: '本会话自动提交：关', refresh: '刷新', log: '日志', compare: '对比', status: '工作区', graph: '版本图', undo: '撤销', cancel: '取消', confirm: '确认撤销', warning: '将创建一个新的 revert 提交，原有历史保留。', empty: '本会话暂无 AI 提交。', failed: '操作失败', latest: '最近结果', history: '本会话 AI 提交', native: '打开 TortoiseGit 原生窗口', committed: '已提交', skipped: '已跳过', error: '出错', reverted: '已撤销', conflict: '撤销冲突', close: '关闭', rules: '不自动提交的文件', detected: '识别到的工程', none: '未识别到特定工具链（使用内置清单 + .gitignore）', learned: 'AI 判定的产物', forget: '恢复提交', redetect: '重新识别', patterns: '条规则', omitted: '已排除产物', noRepo: '未建仓库', initHint: '当前目录还不是 Git 仓库。一键新建会先分析目录（内置规则 + 识别工具链 + AI 检查），列出要忽略的文件供你确认，然后建仓库、做初始提交并开启自动提交。', initStart: '一键新建仓库', analyzing: '正在分析目录…（AI 检查需要忽略的文件，约 10–30 秒）', initBlocked: '这个目录不适合自动建仓库', blocked_drive_root: '盘符根目录', blocked_home_directory: '用户主目录', blocked_user_folder: '桌面/文档/下载等用户目录', blocked_system_folder: '系统或程序目录', too_many_files: '文件太多（超过 5 万个），可能不是工程目录', ignoreList: '将写入 .gitignore（可取消勾选）', willCommit: '初始提交约', ignored: '忽略', files: '个文件', aiFailed: 'AI 建议不可用，仅使用规则', aiTag: 'AI', sourceWarn: '含源码/文档类文件，默认不忽略', create: '创建仓库并初始提交', creating: '正在创建…', identity: '未配置 Git 用户名/邮箱：请在 TortoiseGit 设置 → Git 中填写后重试。', dirLabel: '目录', modeLabel: '纳入范围', modeCode: '仅代码（推荐）', modeAll: '全部文件', modeCodeHint: '只纳入源码、头文件、构建脚本、工程文件（uvprojx/ewp/ioc/CMakeLists…）和代码配置（json/yaml/ini/sdkconfig…）；md、Word、Excel、PDF、txt、图片、压缩包等一律不纳入。以后新建的文档也不会被自动提交。', modeAllHint: '纳入目录下所有文件，只排除下面勾选的规则。', includes: '将纳入', ignoreListCode: '代码文件中再排除（可取消勾选）', noEntries: '无需额外排除', nothing_to_commit: '没有可提交的文件', codeOnly: '仅保留代码文件', codeOnlyAsk: '将停止跟踪非代码文件（md、Word、Excel、txt、图片等；文件仍保留在磁盘上，可随时恢复）：', codeOnlyRule: '已跟踪的都是代码文件；确认后写入“仅代码”规则，以后新建的文档也不会被提交。', codeOnlyDone: '此仓库已经是“仅代码”模式。', codeOnlyConfirm: '确认并提交', dirtyFirst: '请先提交或还原这些修改', modeManual: '手动选择', modeManualHint: '勾选要纳入的文件夹，未勾选的不纳入；子文件夹默认跟随上级，可单独取消或改设置。勾“自动识别”的文件夹只纳入代码并屏蔽编译产物；不勾则该文件夹全部纳入。', manualTree: '文件夹', rootFiles: '(根目录下的文件)', collapse: '收起', expand: '展开', autoShort: '识别后', autoHint: '只纳入代码文件，并自动屏蔽编译产物、缓存、日志等', autoDetect: '自动识别', ignoreListManual: '“自动识别”的文件夹中再排除（可取消勾选）', pickFolders: '请至少勾选一个文件夹', nothing_selected: '请至少勾选一个文件夹' };
-    const en = { title: 'TortoiseGit AI history', notEnabled: 'Off', enableRepo: 'Enable auto-commit for this repository', disableRepo: 'Disable for this repository', enableHint: 'When enabled, each AI turn that edits files is committed to the current branch (only the AI\'s own changes; turns that start with uncommitted changes are skipped).', sessionOn: 'Session auto-commit: on', sessionOff: 'Session auto-commit: off', refresh: 'Refresh', log: 'Log', compare: 'Compare', status: 'Working tree', graph: 'Graph', undo: 'Revert', cancel: 'Cancel', confirm: 'Confirm revert', warning: 'Creates a new revert commit; history is kept.', empty: 'No AI commits in this session yet.', failed: 'Operation failed', latest: 'Latest', history: 'AI commits in this session', native: 'Opens a native TortoiseGit window', committed: 'Committed', skipped: 'Skipped', error: 'Error', reverted: 'Reverted', conflict: 'Revert conflict', close: 'Close', rules: 'Never auto-committed', detected: 'Detected projects', none: 'No specific toolchain detected (built-in list + .gitignore)', learned: 'Judged artifacts (AI)', forget: 'Commit again', redetect: 'Re-detect', patterns: 'rules', omitted: 'Artifacts excluded', noRepo: 'No repo', initHint: 'This folder is not a Git repository yet. One click analyses it (built-in rules, toolchain detection, AI review), lists what will be ignored for you to confirm, then creates the repository, makes the first commit and enables auto-commit.', initStart: 'Create repository', analyzing: 'Analysing folder… (AI review, ~10–30 s)', initBlocked: 'Not a suitable folder for a repository', blocked_drive_root: 'drive root', blocked_home_directory: 'home folder', blocked_user_folder: 'Desktop/Documents/Downloads', blocked_system_folder: 'system or program folder', too_many_files: 'too many files (over 50k)', ignoreList: 'Written to .gitignore (untick to keep)', willCommit: 'First commit ≈', ignored: 'ignored', files: 'files', aiFailed: 'AI suggestions unavailable; rules only', aiTag: 'AI', sourceWarn: 'contains source/doc files; not ignored by default', create: 'Create repository and commit', creating: 'Creating…', identity: 'Git user name/email missing: set them in TortoiseGit Settings → Git, then retry.', dirLabel: 'Folder', modeLabel: 'Scope', modeCode: 'Code only (recommended)', modeAll: 'All files', modeCodeHint: 'Only sources, headers, build scripts, project files (uvprojx/ewp/ioc/CMakeLists…) and code configuration (json/yaml/ini/sdkconfig…); md, Word, Excel, PDF, txt, images and archives stay out, now and later.', modeAllHint: 'Everything in the folder except the ticked rules below.', includes: 'Includes', ignoreListCode: 'Also exclude among code files (untick to keep)', noEntries: 'Nothing else to exclude', nothing_to_commit: 'Nothing to commit', codeOnly: 'Keep code only', codeOnlyAsk: 'Stop tracking non-code files (md, Word, Excel, txt, images…; they stay on disk):', codeOnlyRule: 'Only code files are tracked; confirming writes the code-only rules so new documents stay out.', codeOnlyDone: 'This repository is already code-only.', codeOnlyConfirm: 'Confirm and commit', dirtyFirst: 'Commit or revert these changes first', modeManual: 'Pick folders', modeManualHint: 'Tick the folders to include; unticked ones stay out. Subfolders follow their parent unless changed. Folders with "Auto detect" keep only code and drop build output; without it, everything in the folder is included.', manualTree: 'Folders', rootFiles: '(files in the root)', collapse: 'Collapse', expand: 'Expand', autoShort: 'auto', autoHint: 'Keep only code files and drop build output, caches and logs', autoDetect: 'Auto detect', ignoreListManual: 'Also exclude in auto-detect folders (untick to keep)', pickFolders: 'Tick at least one folder', nothing_selected: 'Tick at least one folder' };
+    const zh = { title: '小乌龟 AI 版本记录', notEnabled: '未启用', enableRepo: '在此仓库启用自动提交', disableRepo: '在此仓库停用', enableHint: '启用后，AI 每轮修改结束会自动提交到当前分支（只提交 AI 本轮的改动；轮次开始时有未提交修改则跳过）。', sessionOn: '本会话自动提交：开', sessionOff: '本会话自动提交：关', refresh: '刷新', log: '日志', compare: '对比', status: '工作区', graph: '版本图', undo: '撤销', cancel: '取消', confirm: '确认撤销', warning: '将创建一个新的 revert 提交，原有历史保留。', empty: '本会话暂无 AI 提交。', failed: '操作失败', latest: '最近结果', history: '本会话 AI 提交', native: '打开 TortoiseGit 原生窗口', committed: '已提交', skipped: '已跳过', error: '出错', reverted: '已撤销', conflict: '撤销冲突', close: '关闭', rules: '不自动提交的文件', detected: '识别到的工程', none: '未识别到特定工具链（使用内置清单 + .gitignore）', learned: 'AI 判定的产物', forget: '恢复提交', redetect: '重新识别', patterns: '条规则', omitted: '已排除产物', noRepo: '未建仓库', initHint: '当前目录还不是 Git 仓库。一键新建会先分析目录（内置规则 + 识别工具链 + AI 检查），列出要忽略的文件供你确认，然后建仓库、做初始提交并开启自动提交。', initStart: '一键新建仓库', analyzing: '正在分析目录…（AI 检查需要忽略的文件，约 10–30 秒）', initBlocked: '这个目录不适合自动建仓库', blocked_drive_root: '盘符根目录', blocked_home_directory: '用户主目录', blocked_user_folder: '桌面/文档/下载等用户目录', blocked_system_folder: '系统或程序目录', too_many_files: '文件太多（超过 5 万个），可能不是工程目录', ignoreList: '将写入 .gitignore（可取消勾选）', willCommit: '初始提交约', ignored: '忽略', files: '个文件', aiFailed: 'AI 建议不可用，仅使用规则', aiTag: 'AI', sourceWarn: '含源码/文档类文件，默认不忽略', create: '创建仓库并初始提交', creating: '正在创建…', identity: '未配置 Git 用户名/邮箱：请在 TortoiseGit 设置 → Git 中填写后重试。', dirLabel: '目录', modeLabel: '纳入范围', modeCode: '仅代码（推荐）', modeAll: '全部文件', modeCodeHint: '只纳入源码、头文件、构建脚本、工程文件（uvprojx/ewp/ioc/CMakeLists…）和代码配置（json/yaml/ini/sdkconfig…）；md、Word、Excel、PDF、txt、图片、压缩包等一律不纳入。以后新建的文档也不会被自动提交。', modeAllHint: '纳入目录下所有文件，只排除下面勾选的规则。', includes: '将纳入', ignoreListCode: '代码文件中再排除（可取消勾选）', noEntries: '无需额外排除', nothing_to_commit: '没有可提交的文件', codeOnly: '仅保留代码文件', codeOnlyAsk: '将停止跟踪非代码文件（md、Word、Excel、txt、图片等；文件仍保留在磁盘上，可随时恢复）：', codeOnlyRule: '已跟踪的都是代码文件；确认后写入“仅代码”规则，以后新建的文档也不会被提交。', codeOnlyDone: '此仓库已经是“仅代码”模式。', codeOnlyConfirm: '确认并提交', dirtyFirst: '请先提交或还原这些修改', modeManual: '手动选择', modeManualHint: '勾选要纳入的文件夹，未勾选的不纳入；子文件夹默认跟随上级，可单独取消或改设置。勾“自动识别”的文件夹只纳入代码并屏蔽编译产物；不勾则该文件夹全部纳入。', manualTree: '文件夹', rootFiles: '(根目录下的文件)', collapse: '收起', expand: '展开', autoShort: '识别后', autoHint: '只纳入代码文件，并自动屏蔽编译产物、缓存、日志等', autoDetect: '自动识别', ignoreListManual: '“自动识别”的文件夹中再排除（可取消勾选）', pickFolders: '请至少勾选一个文件夹', nothing_selected: '请至少勾选一个文件夹', pickHint: '先勾选要纳入的文件夹（未勾选的不纳入），再点“分析”。只扫描勾选的文件夹，大目录也能用。勾“自动识别”的文件夹只纳入代码并屏蔽编译产物；不勾则全部纳入。子文件夹跟随上级，可展开单独设置。', allAuto: '全选·自动识别', allAll: '全选·全部纳入', clearPick: '清空', analyzePicked: '分析所选文件夹', loading: '读取中…', tooManyDirs: '（子文件夹过多，只显示前 500 个）', artifactTag: '产物', nestedTag: '独立仓库，不能纳入', scope: '范围', allIn: '全部纳入', excluded: '排除', skippedDirs: '自动识别的文件夹里未展开扫描的产物文件夹（node_modules/build 等，已写入忽略规则）：', scanned: '共扫描', backToPick: '返回修改选择', selection_too_large: '所选文件夹里文件太多（超过 5 万个），请少选一些或打开“自动识别”' };
+    const en = { title: 'TortoiseGit AI history', notEnabled: 'Off', enableRepo: 'Enable auto-commit for this repository', disableRepo: 'Disable for this repository', enableHint: 'When enabled, each AI turn that edits files is committed to the current branch (only the AI\'s own changes; turns that start with uncommitted changes are skipped).', sessionOn: 'Session auto-commit: on', sessionOff: 'Session auto-commit: off', refresh: 'Refresh', log: 'Log', compare: 'Compare', status: 'Working tree', graph: 'Graph', undo: 'Revert', cancel: 'Cancel', confirm: 'Confirm revert', warning: 'Creates a new revert commit; history is kept.', empty: 'No AI commits in this session yet.', failed: 'Operation failed', latest: 'Latest', history: 'AI commits in this session', native: 'Opens a native TortoiseGit window', committed: 'Committed', skipped: 'Skipped', error: 'Error', reverted: 'Reverted', conflict: 'Revert conflict', close: 'Close', rules: 'Never auto-committed', detected: 'Detected projects', none: 'No specific toolchain detected (built-in list + .gitignore)', learned: 'Judged artifacts (AI)', forget: 'Commit again', redetect: 'Re-detect', patterns: 'rules', omitted: 'Artifacts excluded', noRepo: 'No repo', initHint: 'This folder is not a Git repository yet. One click analyses it (built-in rules, toolchain detection, AI review), lists what will be ignored for you to confirm, then creates the repository, makes the first commit and enables auto-commit.', initStart: 'Create repository', analyzing: 'Analysing folder… (AI review, ~10–30 s)', initBlocked: 'Not a suitable folder for a repository', blocked_drive_root: 'drive root', blocked_home_directory: 'home folder', blocked_user_folder: 'Desktop/Documents/Downloads', blocked_system_folder: 'system or program folder', too_many_files: 'too many files (over 50k)', ignoreList: 'Written to .gitignore (untick to keep)', willCommit: 'First commit ≈', ignored: 'ignored', files: 'files', aiFailed: 'AI suggestions unavailable; rules only', aiTag: 'AI', sourceWarn: 'contains source/doc files; not ignored by default', create: 'Create repository and commit', creating: 'Creating…', identity: 'Git user name/email missing: set them in TortoiseGit Settings → Git, then retry.', dirLabel: 'Folder', modeLabel: 'Scope', modeCode: 'Code only (recommended)', modeAll: 'All files', modeCodeHint: 'Only sources, headers, build scripts, project files (uvprojx/ewp/ioc/CMakeLists…) and code configuration (json/yaml/ini/sdkconfig…); md, Word, Excel, PDF, txt, images and archives stay out, now and later.', modeAllHint: 'Everything in the folder except the ticked rules below.', includes: 'Includes', ignoreListCode: 'Also exclude among code files (untick to keep)', noEntries: 'Nothing else to exclude', nothing_to_commit: 'Nothing to commit', codeOnly: 'Keep code only', codeOnlyAsk: 'Stop tracking non-code files (md, Word, Excel, txt, images…; they stay on disk):', codeOnlyRule: 'Only code files are tracked; confirming writes the code-only rules so new documents stay out.', codeOnlyDone: 'This repository is already code-only.', codeOnlyConfirm: 'Confirm and commit', dirtyFirst: 'Commit or revert these changes first', modeManual: 'Pick folders', modeManualHint: 'Tick the folders to include; unticked ones stay out. Subfolders follow their parent unless changed. Folders with "Auto detect" keep only code and drop build output; without it, everything in the folder is included.', manualTree: 'Folders', rootFiles: '(files in the root)', collapse: 'Collapse', expand: 'Expand', autoShort: 'auto', autoHint: 'Keep only code files and drop build output, caches and logs', autoDetect: 'Auto detect', ignoreListManual: 'Also exclude in auto-detect folders (untick to keep)', pickFolders: 'Tick at least one folder', nothing_selected: 'Tick at least one folder', pickHint: 'Tick the folders to include (unticked ones stay out), then Analyse. Only ticked folders are scanned, so huge trees work. "Auto detect" keeps only code and drops build output; without it the folder is included as is. Subfolders follow their parent; expand to change them.', allAuto: 'All · auto detect', allAll: 'All · everything', clearPick: 'Clear', analyzePicked: 'Analyse selected folders', loading: 'Loading…', tooManyDirs: '(too many subfolders; first 500 shown)', artifactTag: 'artifacts', nestedTag: 'separate repository, cannot be included', scope: 'Scope', allIn: 'everything', excluded: 'excluded', skippedDirs: 'Artifact folders not scanned in auto-detect folders (node_modules/build…, ignored by rule):', scanned: 'scanned', backToPick: 'Back to folders', selection_too_large: 'Too many files in the selected folders (over 50k); pick fewer or turn on auto detect' };
     const css = `.tgai-wrap{position:relative;display:inline-flex}
 .tgai-pill{display:inline-flex;align-items:center;gap:5px;font:inherit;font-size:12px;line-height:20px;color:var(--dsw-alias-label-secondary);background:transparent;border:0;border-radius:6px;padding:2px 6px;cursor:pointer;white-space:nowrap}
 .tgai-pill:hover,.tgai-pill[aria-expanded=true]{background:var(--dsw-alias-bg-layer-2);color:var(--dsw-alias-label-primary)}
@@ -60,20 +60,25 @@ window.__ModuleLoader__.load({
           const [plan, setPlan] = React.useState(null);
           const [picked, setPicked] = React.useState(null);
           const [phase, setPhase] = React.useState('');
-          const [mode, setMode] = React.useState('code');
           const [codePreview, setCodePreview] = React.useState(null);
-          const [sel, setSel] = React.useState(() => new Map()); // manual mode: dir -> { include, auto }
+          const [sel, setSel] = React.useState(() => new Map()); // folder picker: dir -> { include, auto }
           const [expanded, setExpanded] = React.useState(() => new Set());
+          const [listing, setListing] = React.useState(() => new Map()); // dir -> { files, dirs }
           const [preview, setPreview] = React.useState(null);
           const selection = () => [...sel].map(([dir, v]) => ({ dir, include: v.include, auto: v.auto }));
           React.useEffect(() => {
             if (!plan || !picked) { setPreview(null); return undefined; }
             let live = true;
             const timer = setTimeout(async () => {
-              try { const v = await post({ action: 'planPreview', planId: plan.planId, checked: [...picked], mode, selection: mode === 'manual' ? selection() : [] }); if (live && alive.current && v.ok) setPreview(v); } catch { /* keep the last preview */ }
+              try { const v = await post({ action: 'planPreview', planId: plan.planId, checked: [...picked] }); if (live && alive.current && v.ok) setPreview(v); } catch { /* keep the last preview */ }
             }, 150);
             return () => { live = false; clearTimeout(timer); };
-          }, [plan, picked, mode, sel]);
+          }, [plan, picked]);
+          async function loadDir(dir) {
+            if (listing.has(dir)) return;
+            try { const v = await post({ action: 'listDirs', dir }); if (alive.current && v.ok) setListing(prev => new Map(prev).set(dir, v)); } catch (e) { if (alive.current) setError(String(e.message || e)); }
+          }
+          React.useEffect(() => { if (open && data?.noRepo && !data.initBlocked && !listing.has('')) loadDir(''); }, [open, data?.noRepo, data?.initBlocked]);
           const alive = React.useRef(true);
           const wrap = React.useRef(null);
           const refresh = React.useCallback(async () => {
@@ -82,7 +87,9 @@ window.__ModuleLoader__.load({
             catch (e) { if (alive.current) setError(String(e.message || e)); }
           }, [sessionId]);
           React.useEffect(() => {
-            alive.current = true; setData(null); setError(''); setOpen(false); refresh();
+            alive.current = true; setData(null); setError(''); setOpen(false);
+            setPlan(null); setPicked(null); setSel(new Map()); setListing(new Map()); setExpanded(new Set()); setCodePreview(null);
+            refresh();
             const timer = window.setInterval(() => { if (document.visibilityState === 'visible') refresh(); }, 5000);
             return () => { alive.current = false; window.clearInterval(timer); };
           }, [refresh]);
@@ -108,18 +115,18 @@ window.__ModuleLoader__.load({
           async function startPlan() {
             setPhase('analyzing'); setError(''); setPlan(null);
             try {
-              const value = await post({ action: 'planRepo' });
+              const value = await post({ action: 'planRepo', selection: selection() });
               if (value.status === 'error') throw new Error(t(value.reason) !== value.reason ? t(value.reason) : value.reason);
-              if (alive.current) { setPlan(value); setPicked(new Set(value.entries.filter(e => e.checked).map(e => e.id))); setSel(new Map()); setExpanded(new Set()); }
+              if (alive.current) { setPlan(value); setPicked(new Set(value.entries.filter(e => e.checked).map(e => e.id))); }
             } catch (e) { if (alive.current) setError(String(e.message || e)); }
             finally { if (alive.current) setPhase(''); }
           }
           async function createRepo() {
             setPhase('creating'); setError('');
             try {
-              const value = await post({ action: 'initRepo', planId: plan.planId, checked: [...picked], mode, selection: mode === 'manual' ? selection() : [] });
-              if (value.status === 'error' || value.status === 'skipped') throw new Error(value.reason === 'git_identity_missing' ? t('identity') : (value.error || value.reason));
-              if (alive.current) { setPlan(null); setPicked(null); }
+              const value = await post({ action: 'initRepo', planId: plan.planId, checked: [...picked] });
+              if (value.status === 'error' || value.status === 'skipped') throw new Error(value.reason === 'git_identity_missing' ? t('identity') : (t(value.reason) !== value.reason ? t(value.reason) : (value.error || value.reason)));
+              if (alive.current) { setPlan(null); setPicked(null); setSel(new Map()); setListing(new Map()); setExpanded(new Set()); }
               await refresh();
             } catch (e) { if (alive.current) setError(String(e.message || e)); }
             finally { if (alive.current) setPhase(''); }
@@ -127,59 +134,72 @@ window.__ModuleLoader__.load({
           if (data?.noRepo && data.initBlocked && !open) return null; // home/system folders: stay out of the way
           if (data?.noRepo) {
             const toggle = id => setPicked(prev => { const next = new Set(prev); if (next.has(id)) next.delete(id); else next.add(id); return next; });
-            const codeMode = mode !== 'all', manual = mode === 'manual';
-            const count = e => (codeMode ? e.codeFiles : e.files);
-            const shown = plan ? plan.entries.filter(e => !codeMode || e.codeFiles > 0) : [];
-            const totals = preview || (plan ? plan.modes[mode] || { keptFiles: 0, keptBytes: 0, extensions: [] } : null);
-            // Manual tree: the deepest explicit choice on the folder or an ancestor decides.
+            // Folder picker: the deepest explicit choice on the folder or an ancestor decides.
             const parentOf = dir => (dir.includes('/') ? dir.slice(0, dir.lastIndexOf('/')) : null);
             const inherited = dir => { for (let p = parentOf(dir); p !== null; p = parentOf(p)) if (sel.has(p)) return sel.get(p); return null; };
             const effective = dir => sel.get(dir) || (dir === '' ? null : inherited(dir));
             const same = (a, b) => (!a || !a.include) ? (!b || !b.include) : (!!b && b.include && a.auto === b.auto);
             const choose = (dir, value) => setSel(prev => { const next = new Map(prev); if (same(value, dir === '' ? null : inherited(dir))) next.delete(dir); else next.set(dir, value); return next; });
-            const rows = plan?.tree || [];
-            const hasKids = i => i + 1 < rows.length && rows[i + 1].depth > rows[i].depth && rows[i + 1].path.startsWith(`${rows[i].path}/`);
-            const visible = r => { if (r.depth <= 1) return true; for (let p = parentOf(r.path); p !== null; p = parentOf(p)) if (!expanded.has(p)) return false; return true; };
             const anyIncluded = [...sel.values()].some(v => v.include);
-            const tree = manual ? h('div', { className: 'tgai-plan', role: 'tree', 'aria-label': t('manualTree') }, rows.map((r, i) => {
-              if (!visible(r)) return null;
-              const eff = effective(r.path), on = !!eff?.include, explicit = sel.has(r.path), kids = hasKids(i), open = expanded.has(r.path);
-              const name = r.path === '' ? t('rootFiles') : r.path.slice(r.path.lastIndexOf('/') + 1);
-              return h('div', { key: r.path || '.', role: 'treeitem', 'aria-expanded': kids ? open : undefined, className: 'tgai-row', style: { paddingLeft: `${Math.max(0, r.depth - 1) * 14}px`, flexWrap: 'nowrap', opacity: on && !explicit ? 0.8 : 1 } },
-                h('button', { type: 'button', className: 'tgai-twisty', 'aria-label': open ? t('collapse') : t('expand'), disabled: !kids, onClick: () => setExpanded(prev => { const n = new Set(prev); if (n.has(r.path)) n.delete(r.path); else n.add(r.path); return n; }) }, kids ? (open ? '▾' : '▸') : ''),
+            const selectAll = auto => { const top = listing.get(''); if (!top) return; const next = new Map(); if (top.files) next.set('', { include: true, auto }); for (const d of top.dirs) if (!d.artifact && !d.nestedRepo) next.set(d.path, { include: true, auto }); setSel(next); };
+            const row = (r, depth) => {
+              const isRoot = r.path === '';
+              const eff = effective(r.path), on = !!eff?.include && !r.nestedRepo, explicit = sel.has(r.path), isOpen = expanded.has(r.path);
+              const tags = [r.artifact ? t('artifactTag') : '', r.nestedRepo ? t('nestedTag') : ''].filter(Boolean).join(' ');
+              return h('div', { key: r.path || '.', role: 'treeitem', 'aria-expanded': r.hasChildren ? isOpen : undefined, className: 'tgai-row', style: { paddingLeft: `${depth * 14}px`, flexWrap: 'nowrap', opacity: on && !explicit ? 0.8 : 1 } },
+                h('button', { type: 'button', className: 'tgai-twisty', 'aria-label': isOpen ? t('collapse') : t('expand'), disabled: !r.hasChildren || r.nestedRepo, onClick: () => { setExpanded(prev => { const n = new Set(prev); if (n.has(r.path)) n.delete(r.path); else n.add(r.path); return n; }); loadDir(r.path); } }, r.hasChildren && !r.nestedRepo ? (isOpen ? '▾' : '▸') : ''),
                 h('label', { style: { display: 'flex', gap: '4px', alignItems: 'center', flex: '1 1 auto', minWidth: 0 } },
-                  h('input', { type: 'checkbox', checked: on, disabled: !!phase, onChange: () => choose(r.path, { include: !on, auto: eff?.auto ?? true }) }),
-                  h('span', { style: { overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }, title: r.path || t('rootFiles') }, r.path === '' ? h('em', null, name) : name),
-                  h('small', { style: { whiteSpace: 'nowrap' } }, ` ${r.files} · ${t('autoShort')} ${r.autoFiles}`)),
+                  h('input', { type: 'checkbox', checked: on, disabled: !!phase || r.nestedRepo, onChange: () => choose(r.path, { include: !on, auto: eff?.auto ?? true }) }),
+                  h('span', { style: { overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }, title: r.path || t('rootFiles') }, isRoot ? h('em', null, t('rootFiles')) : r.name),
+                  h('small', { style: { whiteSpace: 'nowrap' } }, ` ${r.files} ${t('files')}${tags ? ` · ${tags}` : ''}`)),
                 on ? h('label', { style: { whiteSpace: 'nowrap' }, title: t('autoHint') },
                   h('input', { type: 'checkbox', checked: eff.auto, disabled: !!phase, onChange: () => choose(r.path, { include: true, auto: !eff.auto }) }), h('small', null, t('autoDetect'))) : null);
-            })) : null;
-            const modeBtn = (value, label) => h('button', { type: 'button', role: 'radio', 'aria-checked': mode === value, className: mode === value ? 'tgai-primary' : '', disabled: !!phase, onClick: () => setMode(value) }, label);
+            };
+            const branch = (dir, depth) => {
+              const l = listing.get(dir);
+              if (!l) return [h('div', { key: `${dir}…`, style: { paddingLeft: `${depth * 14 + 20}px` } }, h('small', null, t('loading')))];
+              const out = [];
+              for (const d of l.dirs) { out.push(row(d, depth)); if (expanded.has(d.path) && !d.nestedRepo) out.push(...branch(d.path, depth + 1)); }
+              if (l.truncated) out.push(h('small', { key: `${dir}+` }, t('tooManyDirs')));
+              return out;
+            };
+            const top = listing.get('');
+            const picker = h('div', { className: 'tgai-plan', role: 'tree', 'aria-label': t('manualTree') },
+              top ? [top.files ? row({ path: '', name: '', files: top.files, hasChildren: false }, 0) : null, ...branch('', 0)] : h('small', null, t('loading')));
+            const chosen = plan?.selection || [];
+            const totals = preview;
             const labels = list => [...new Set(list.map(p => (p.dir ? `${p.label} (${p.dir})` : p.label)))].join(', ');
+            const shown = plan ? plan.entries.filter(e => e.files > 0 || e.source === 'nested') : [];
             const initPanel = h('div', { className: 'tgai-pop', role: 'dialog', 'aria-label': t('title') },
               h('div', { className: 'tgai-row tgai-head' }, h('strong', null, t('title')),
                 h('button', { type: 'button', className: 'tgai-x', 'aria-label': t('close'), onClick: () => setOpen(false) }, '×')),
               h('p', null, h('small', null, `${t('dirLabel')}: `), h('code', null, data.cwd || '')),
               data.initBlocked ? h('p', { className: 'tgai-error' }, `${t('initBlocked')}（${t(`blocked_${data.initBlocked}`)}）`)
-              : !plan ? h(React.Fragment, null, h('p', null, h('small', null, t('initHint'))),
-                  h('div', { className: 'tgai-row' }, h('button', { type: 'button', className: 'tgai-primary', disabled: !!phase, onClick: startPlan }, phase === 'analyzing' ? t('analyzing') : t('initStart'))))
+              : !plan ? h(React.Fragment, null,
+                  h('p', null, h('small', null, t('pickHint'))),
+                  h('div', { className: 'tgai-row' },
+                    h('button', { type: 'button', disabled: !!phase || !top, onClick: () => selectAll(true) }, t('allAuto')),
+                    h('button', { type: 'button', disabled: !!phase || !top, onClick: () => selectAll(false) }, t('allAll')),
+                    h('button', { type: 'button', disabled: !!phase || !sel.size, onClick: () => setSel(new Map()) }, t('clearPick'))),
+                  picker,
+                  h('div', { className: 'tgai-row' }, h('button', { type: 'button', className: 'tgai-primary', disabled: !!phase || !anyIncluded, title: anyIncluded ? undefined : t('pickFolders'), onClick: startPlan }, phase === 'analyzing' ? t('analyzing') : t('analyzePicked'))))
               : h(React.Fragment, null,
+                  h('p', null, h('small', null, `${t('scope')}: ${chosen.filter(s => s.include).map(s => `${s.dir || t('rootFiles')}${s.auto ? `（${t('autoDetect')}）` : `（${t('allIn')}）`}`).join('、')}`
+                    + (chosen.some(s => !s.include) ? `；${t('excluded')}: ${chosen.filter(s => !s.include).map(s => s.dir).join('、')}` : ''))),
                   plan.profiles?.length ? h('p', null, h('small', null, `${t('detected')}: ${labels(plan.profiles)}`)) : null,
                   plan.ai?.status === 'failed' ? h('p', null, h('small', null, `${t('aiFailed')} (${plan.ai.reason})`)) : null,
-                  h('div', { className: 'tgai-row', role: 'radiogroup', 'aria-label': t('modeLabel'), style: { marginTop: 4 } }, modeBtn('code', t('modeCode')), modeBtn('all', t('modeAll')), modeBtn('manual', t('modeManual'))),
-                  h('p', null, h('small', null, manual ? t('modeManualHint') : codeMode ? t('modeCodeHint') : t('modeAllHint'))),
-                  tree,
+                  plan.skippedCount ? h('p', null, h('small', { title: plan.skipped.join('\n') }, `${t('skippedDirs')} ${plan.skippedCount}`)) : null,
                   totals?.extensions?.length ? h('p', null, h('small', null, `${t('includes')}: ${totals.extensions.map(([e, n]) => `${e}×${n}`).join('  ')}`)) : null,
-                  h('div', { className: 'tgai-section' }, manual ? t('ignoreListManual') : codeMode ? t('ignoreListCode') : t('ignoreList')),
+                  h('div', { className: 'tgai-section' }, t('ignoreListManual')),
                   h('div', { className: 'tgai-plan' }, shown.length ? shown.map(e => h('label', { key: e.id, 'data-locked': String(!!e.locked), title: e.sample.join('\n') },
                     h('input', { type: 'checkbox', checked: e.locked || picked.has(e.id), disabled: e.locked || !!phase, onChange: () => toggle(e.id) }),
                     h('span', null, h('code', null, e.pattern), ' ', e.source === 'ai' ? h('span', { className: 'tgai-tag' }, t('aiTag')) : null, ' ',
-                      h('small', null, `${e.reason} · ${count(e)} ${t('files')}${codeMode ? '' : ` · ${human(e.bytes)}`}`),
+                      h('small', null, e.source === 'nested' ? e.reason : `${e.reason} · ${e.files} ${t('files')} · ${human(e.bytes)}`),
                       e.sourceFiles ? h('small', { className: 'tgai-error', style: { display: 'block' } }, `${t('sourceWarn')} (${e.sourceFiles})`) : null))) : h('small', null, t('noEntries'))),
-                  totals ? h('p', null, `${t('willCommit')} ${totals.keptFiles} ${t('files')}（${human(totals.keptBytes)}），${t('ignored')} ${plan.totalFiles - totals.keptFiles} / ${plan.totalFiles}`) : null,
+                  totals ? h('p', null, `${t('willCommit')} ${totals.keptFiles} ${t('files')}（${human(totals.keptBytes)}），${t('scanned')} ${plan.totalFiles}`) : h('p', null, h('small', null, t('loading'))),
                   h('div', { className: 'tgai-row' },
-                    h('button', { type: 'button', className: 'tgai-primary', disabled: !!phase || (manual && !anyIncluded), title: manual && !anyIncluded ? t('pickFolders') : undefined, onClick: createRepo }, phase === 'creating' ? t('creating') : t('create')),
-                    h('button', { type: 'button', disabled: !!phase, onClick: () => { setPlan(null); setPicked(null); } }, t('cancel')))),
+                    h('button', { type: 'button', className: 'tgai-primary', disabled: !!phase || !totals?.keptFiles, onClick: createRepo }, phase === 'creating' ? t('creating') : t('create')),
+                    h('button', { type: 'button', disabled: !!phase, onClick: () => { setPlan(null); setPicked(null); } }, t('backToPick')))),
               error ? h('p', { className: 'tgai-error', role: 'alert' }, error) : null);
             return h('span', { className: 'tgai-wrap', ref: wrap }, h('style', null, css),
               h('button', { type: 'button', className: 'tgai-pill', 'aria-expanded': open, 'aria-haspopup': 'dialog', title: t('title'), onClick: () => setOpen(v => !v) },

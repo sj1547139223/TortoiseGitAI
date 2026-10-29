@@ -5,7 +5,7 @@ import { createHash } from 'node:crypto';
 import { GitService } from './lib/git.js';
 import { generateSummary } from './lib/summary.js';
 import { detectProfiles } from './lib/detect.js';
-import { buildPlan, planTotals, gitignoreText, manualGitignore, normalizeSelection, initBlockedReason, isCodeFile } from './lib/init.js';
+import { buildPlan, planTotals, gitignoreText, manualGitignore, normalizeSelection, initBlockedReason, isCodeFile, listDirs } from './lib/init.js';
 import { locateTortoiseGit, openTortoiseGit } from './lib/tgit.js';
 
 /**
@@ -28,7 +28,8 @@ export const Config = z.object({
   defaultExcludes: z.boolean().default(true),
 });
 const Request = z.object({
-  action: z.enum(['status', 'log', 'diff', 'open', 'pause', 'resume', 'undo', 'enableRepo', 'disableRepo', 'forgetExclude', 'redetect', 'planRepo', 'planPreview', 'initRepo', 'codeOnly']),
+  action: z.enum(['status', 'log', 'diff', 'open', 'pause', 'resume', 'undo', 'enableRepo', 'disableRepo', 'forgetExclude', 'redetect', 'listDirs', 'planRepo', 'planPreview', 'initRepo', 'codeOnly']),
+  dir: z.string().max(1000).optional(),
   planId: z.string().uuid().optional(),
   mode: z.enum(['code', 'all', 'manual']).optional(),
   selection: z.array(z.object({ dir: z.string().max(1000), include: z.boolean().optional(), auto: z.boolean() }).strict()).max(1500).optional(),
@@ -49,7 +50,7 @@ const RepoRecord = z.object({
   detectedAt: z.number().optional(),
 });
 const REPOS_DOMAIN = { name: 'tortoisegit_ai', version: 1, tables: { repos: { valueSchema: RepoRecord } } };
-const UI_ONLY = new Set(['enableRepo', 'disableRepo', 'forgetExclude', 'redetect', 'planRepo', 'planPreview', 'initRepo', 'codeOnly']);
+const UI_ONLY = new Set(['enableRepo', 'disableRepo', 'forgetExclude', 'redetect', 'listDirs', 'planRepo', 'planPreview', 'initRepo', 'codeOnly']);
 const PLAN_TTL_MS = 15 * 60 * 1000;
 const DETECT_TTL_MS = 10 * 60 * 1000;
 const ROUTE_STATUS = '/api/tortoisegit-ai.status';
@@ -138,7 +139,7 @@ export function apply(ctx, rawConfig) {
     const checked = new Set(plan.entries.filter(e => e.checked).map(e => e.id));
     const view = mode => { const x = planTotals(plan, checked, mode); return { keptFiles: x.keptFiles, keptBytes: x.keptBytes, extensions: x.extensions }; };
     return { planId: plan.id, root: plan.root, profiles: plan.profiles, ai: plan.ai, totalFiles: plan.files.length, totalBytes: plan.files.reduce((n, f) => n + f.size, 0),
-      modes: { code: view('code'), all: view('all') }, tree: plan.tree,
+      modes: { code: view('code'), all: view('all') }, tree: plan.tree, selection: plan.selection, skipped: plan.skipped || [], skippedCount: plan.skippedCount || 0,
       entries: plan.entries.map(({ id, pattern, source, reason, locked, checked: on, files, bytes, sourceFiles, codeFiles, sample }) => ({ id, pattern: pattern === '(sensitive)' ? '.env / 密钥' : pattern, source, reason, locked, checked: on, files, bytes, sourceFiles, codeFiles, sample })) };
   };
   const othersRunning = (self, key) => [...running].some(([id, k]) => id !== self && k === key);
@@ -191,15 +192,21 @@ export function apply(ctx, rawConfig) {
       if (!repo.status?.noRepo) return repo.status;
       const root = await ctx.workingDirectory.ensure(agent, signal);
       const route = agent.session?.requestHeader?.()?.config;
-      const plan = await buildPlan(root, { llm: ctx.llm, route, sessionId: agent.id, signal, timeoutMs: 25000 });
+      const plan = await buildPlan(root, { llm: ctx.llm, route, sessionId: agent.id, signal, timeoutMs: 25000, selection: args.selection || null });
       if (plan.status !== 'ready') return { status: 'error', reason: plan.reason, files: plan.files };
+      if (plan.selection) plan.tree = []; // the folder picker already showed the tree
       plans.set(agent.id, plan);
       return { ok: true, ...planView(plan) };
+    }
+    if (args.action === 'listDirs') {
+      if (repo.cwd) return { status: 'error', reason: 'already_repository' };
+      const root = await ctx.workingDirectory.ensure(agent, signal);
+      return { ok: true, ...(await listDirs(root, args.dir || '')) };
     }
     if (args.action === 'planPreview') {
       const plan = plans.get(agent.id);
       if (!plan || plan.id !== args.planId) return { status: 'error', reason: 'plan_expired' };
-      const x = planTotals(plan, new Set(args.checked || []), args.mode || 'code', args.selection || []);
+      const x = plan.selection ? planTotals(plan, new Set(args.checked || []), 'manual', plan.selection) : planTotals(plan, new Set(args.checked || []), args.mode || 'code', args.selection || []);
       return { ok: true, keptFiles: x.keptFiles, keptBytes: x.keptBytes, extensions: x.extensions, large: x.large.slice(0, 5) };
     }
     if (args.action === 'initRepo') {
@@ -209,14 +216,15 @@ export function apply(ctx, rawConfig) {
       const root = await ctx.workingDirectory.ensure(agent, signal);
       if (keyOf(path.resolve(root)) !== keyOf(path.resolve(plan.root))) return { status: 'error', reason: 'plan_expired' };
       if (running.has(agent.id)) return { status: 'error', reason: 'agent_running' };
-      const mode = args.mode || 'code';
-      if (mode === 'manual' && !normalizeSelection(args.selection || [], plan).some(x => x.include)) return { status: 'error', reason: 'nothing_selected' };
-      const totals = planTotals(plan, new Set(args.checked || []), mode, args.selection || []);
+      const mode = plan.selection ? 'manual' : (args.mode || 'code');
+      const chosen = plan.selection || args.selection || [];
+      if (mode === 'manual' && !normalizeSelection(chosen, plan.selection ? null : plan).some(x => x.include)) return { status: 'error', reason: 'nothing_selected' };
+      const totals = planTotals(plan, new Set(args.checked || []), mode, chosen);
       if (!totals.keptFiles) return { status: 'error', reason: 'nothing_to_commit' };
       const huge = plan.files.filter(f => f.size >= 100 * 1024 * 1024 && totals.kept.has(f.path));
       if (huge.length) return { status: 'error', reason: `file_too_large: ${huge.slice(0, 3).map(f => f.path).join(', ')}` };
       let existing = ''; try { existing = await readFile(path.join(root, '.gitignore'), 'utf8'); } catch { /* none yet */ }
-      const result = await git.initRepository(root, { gitignore: mode === 'manual' ? manualGitignore(totals.entries, normalizeSelection(args.selection || [], plan), existing) : gitignoreText(totals.entries, existing, mode), message: '初始提交（TortoiseGit AI 一键建仓）' });
+      const result = await git.initRepository(root, { gitignore: mode === 'manual' ? manualGitignore(totals.entries, normalizeSelection(chosen, plan.selection ? null : plan), existing) : gitignoreText(totals.entries, existing, mode), message: '初始提交（TortoiseGit AI 一键建仓）' });
       if (result.status !== 'committed' && result.status !== 'initialized') return result;
       plans.delete(agent.id); s.baseline = null;
       const created = await repoOf(agent, signal);
