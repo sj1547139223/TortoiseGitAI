@@ -422,3 +422,42 @@ test('Quartus project: keeps project/HDL/IP, drops db, output_files and reports'
   assert.deepEqual(git(cwd, 'ls-files').split(/\r?\n/).sort(), ['.gitignore', 'fpga/ip/pll.qip', 'fpga/ip/pll.v', 'fpga/ram.mif', 'fpga/rtl/top.v', 'fpga/simulation/modelsim/tb.do', 'fpga/soc.qsys', 'fpga/top.qpf', 'fpga/top.qsf', 'fpga/top.sdc']);
   assert.equal(git(cwd, 'status', '--porcelain'), '');
 });
+
+test('cross-tool history, branches, switch, restore: read freely, change only with confirm', async t => {
+  const cwd = await repo(t), h = harness(cwd);
+  const call = async a => JSON.parse(await h.tools.tgit_ai.execute(a, { agent: h.agent }));
+  await turn(h, 1, () => fs.writeFile(path.join(cwd, 'a.txt'), 'two\n'));
+  // another tool (Factory) commits as well
+  await fs.writeFile(path.join(cwd, 'b.txt'), 'b\n'); git(cwd, 'add', '.');
+  git(cwd, 'commit', '-q', '-m', 'Factory: 新增 b\n\nAI-Session: droid-1\nAI-Tool: Factory');
+  const hist = await call({ action: 'history', limit: 10 });
+  assert.deepEqual(hist.commits.map(c => c.tool), ['Factory', 'DSH', 'human']);
+  assert.deepEqual(hist.commits[0].files, ['A b.txt']);
+  assert.deepEqual((await call({ action: 'history', tool: 'factory' })).commits.map(c => c.subject), ['Factory: 新增 b']);
+  assert.equal((await call({ action: 'history', path: 'a.txt' })).commits.length, 2);
+  const [factory, dsh, init] = hist.commits;
+  await assert.rejects(h.tools.tgit_ai.execute({ action: 'restore', sha: dsh.sha }, { agent: h.agent }), /confirm:true/);
+  // restore the version before the DSH change, as a new commit
+  const r = await call({ action: 'restore', sha: dsh.sha, before: true, confirm: true });
+  assert.equal(r.status, 'restored', JSON.stringify(r));
+  assert.equal(await fs.readFile(path.join(cwd, 'a.txt'), 'utf8'), 'one\n');
+  await assert.rejects(fs.stat(path.join(cwd, 'b.txt')));
+  assert.match(git(cwd, 'log', '-1', '--format=%B'), /^DSH: 恢复到 .*之前.*\n\nAI-Session: sess-1\n(?:.*\n)*AI-Tool: DSH\nAI-Restore: /);
+  assert.equal(git(cwd, 'rev-list', '--count', 'HEAD'), '4', 'history kept');
+  // branch at an old commit and switch to it, then back
+  const b = await call({ action: 'branch', name: 'try-old', sha: factory.sha, checkout: true, confirm: true });
+  assert.deepEqual([b.status, b.switched], ['created', true]);
+  assert.equal(git(cwd, 'rev-parse', '--abbrev-ref', 'HEAD'), 'try-old');
+  assert.equal((await call({ action: 'branch', name: 'try-old', confirm: true })).reason, 'branch_exists');
+  assert.equal((await call({ action: 'branch', name: 'bad..name', confirm: true })).reason, 'invalid_branch_name');
+  const list = await call({ action: 'branches' });
+  assert.deepEqual(list.branches.map(x => x.name).sort(), ['main', 'try-old']); assert.equal(list.current, 'try-old');
+  await fs.writeFile(path.join(cwd, 'a.txt'), 'dirty\n');
+  assert.equal((await call({ action: 'switch', name: 'main', confirm: true })).reason, 'dirty_worktree');
+  await fs.writeFile(path.join(cwd, 'a.txt'), 'two\n');
+  assert.equal((await call({ action: 'switch', name: 'main', confirm: true })).status, 'switched');
+  const d = await call({ action: 'switch', sha: init.sha, confirm: true });
+  assert.equal(d.status, 'detached'); assert.match(d.warning, /detached_head/);
+  assert.equal((await call({ action: 'restore', sha: init.sha, confirm: true })).reason, 'detached_head');
+  assert.equal((await call({ action: 'switch', name: 'main', confirm: true })).status, 'switched');
+});

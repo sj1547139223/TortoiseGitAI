@@ -3,24 +3,15 @@ import { pathToFileURL } from 'node:url';
 import { createRuntime } from './runtime.js';
 import { openTortoiseGit } from '../lib/tgit.js';
 import * as store from './store.js';
+import { AI_ACTIONS, OPEN_COMMANDS, CHANGE_ACTIONS, TOOL_DESCRIPTION, TOOL_PROPERTIES, runGitAction } from '../lib/actions.js';
 
 /** Minimal stdio MCP server exposing the same `tgit_ai` tool as the DSH plugin. */
-const ACTIONS = ['status', 'log', 'diff', 'open', 'pause', 'resume', 'undo'];
-const COMMANDS = ['log', 'showcompare', 'repostatus', 'diff', 'blame', 'revisiongraph'];
+const ACTIONS = AI_ACTIONS;
+const COMMANDS = OPEN_COMMANDS;
 export const TOOL = {
   name: 'tgit_ai',
-  description: 'TortoiseGit AI history for this session. Every turn that edits files in an enabled repository is committed automatically when the turn ends (current branch, AI-written Chinese summary, AI-Session/AI-Turn trailers) — never commit those changes yourself. Actions: status | log {limit} | diff {sha} (bounded text diff) | open {command: log|showcompare|repostatus|diff|blame|revisiongraph, sha?, path?} opens a native TortoiseGit window for the user | pause / resume auto-commit | undo {sha, confirm:true} creates a git revert of one of this session\'s AI commits — only when the user explicitly asks. Enabling a repository is done by the user, not by this tool.',
-  inputSchema: {
-    type: 'object', additionalProperties: false, required: ['action'],
-    properties: {
-      action: { type: 'string', enum: ACTIONS },
-      command: { type: 'string', enum: COMMANDS, description: 'Dialog for action=open.' },
-      sha: { type: 'string', description: 'Commit hash (7-64 hex).' },
-      path: { type: 'string', description: 'Repository-relative file for open diff/blame.' },
-      limit: { type: 'integer', minimum: 1, maximum: 100 },
-      confirm: { type: 'boolean', description: 'Must be true for undo, after the user asked.' },
-    },
-  },
+  description: `${TOOL_DESCRIPTION} Enabling a repository is done by the user, not by this tool.`,
+  inputSchema: { type: 'object', additionalProperties: false, required: ['action'], properties: TOOL_PROPERTIES },
 };
 
 function validate(args) {
@@ -31,7 +22,9 @@ function validate(args) {
   if (args.sha != null && !/^[a-f0-9]{7,64}$/i.test(args.sha)) throw new Error('invalid sha');
   if (args.path != null && (typeof args.path !== 'string' || args.path.length > 2000)) throw new Error('invalid path');
   if (args.limit != null && !(Number.isInteger(args.limit) && args.limit >= 1 && args.limit <= 100)) throw new Error('invalid limit');
-  if (args.confirm != null && typeof args.confirm !== 'boolean') throw new Error('invalid confirm');
+  for (const k of ['confirm', 'all', 'checkout', 'before']) if (args[k] != null && typeof args[k] !== 'boolean') throw new Error(`invalid ${k}`);
+  for (const k of ['tool', 'since', 'name']) if (args[k] != null && (typeof args[k] !== 'string' || args[k].length > 200)) throw new Error(`invalid ${k}`);
+  if (args.skip != null && !(Number.isInteger(args.skip) && args.skip >= 0)) throw new Error('invalid skip');
   return args;
 }
 
@@ -65,6 +58,18 @@ export async function operate(raw, { cwd = process.env.FACTORY_PROJECT_DIR || pr
   }
   if (!repo.cwd) return repo.status;
   if (args.action === 'log') return rt.git.log(repo.cwd, { limit: args.limit || 30, sessionId: id });
+  const meta = { tool: 'Factory', sessionId: id, model: rt.config.summaryModel };
+  if (args.action === 'history' || args.action === 'branches') return runGitAction(rt.git, repo.cwd, args, meta);
+  if (CHANGE_ACTIONS.has(args.action) && args.action !== 'undo') {
+    if (args.confirm !== true) throw new Error(`${args.action} requires confirm:true, and only after the user explicitly asked for it`);
+    if (await store.othersRunning(repo.key, id)) throw new Error('other_agent_active: another agent is editing this repository');
+    const result = await runGitAction(rt.git, repo.cwd, args, meta);
+    if (!session) return result;
+    session.baseline = null; // HEAD or the work tree moved: the turn re-baselines
+    const entry = store.record(session, { ...result, action: args.action });
+    await store.putSession(id, session);
+    return entry;
+  }
   if (args.action === 'diff') return rt.git.diff(repo.cwd, { commit: args.sha, maxChars: 16000 });
   if (args.action === 'open') return openTortoiseGit({ executable: await rt.executable(), cwd: repo.cwd, command: args.command || 'log', sha: args.sha, file: args.path, sessionId: id });
   if (args.action === 'undo') {

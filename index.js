@@ -4,6 +4,7 @@ import path from 'node:path';
 import { createHash } from 'node:crypto';
 import { GitService } from './lib/git.js';
 import { generateSummary, withTool } from './lib/summary.js';
+import { TOOL_DESCRIPTION, TOOL_PROPERTIES, runGitAction } from './lib/actions.js';
 import { detectProfiles } from './lib/detect.js';
 import { buildPlan, planTotals, gitignoreText, manualGitignore, normalizeSelection, initBlockedReason, isCodeFile, listDirs } from './lib/init.js';
 import { locateTortoiseGit, openTortoiseGit } from './lib/tgit.js';
@@ -30,7 +31,7 @@ export const Config = z.object({
   defaultExcludes: z.boolean().default(true),
 });
 const Request = z.object({
-  action: z.enum(['status', 'log', 'diff', 'open', 'pause', 'resume', 'undo', 'enableRepo', 'disableRepo', 'forgetExclude', 'redetect', 'listDirs', 'planRepo', 'planPreview', 'initRepo', 'codeOnly']),
+  action: z.enum(['status', 'log', 'history', 'branches', 'diff', 'open', 'pause', 'resume', 'undo', 'branch', 'switch', 'restore', 'enableRepo', 'disableRepo', 'forgetExclude', 'redetect', 'listDirs', 'planRepo', 'planPreview', 'initRepo', 'codeOnly']),
   dir: z.string().max(1000).optional(),
   planId: z.string().uuid().optional(),
   mode: z.enum(['code', 'all', 'manual']).optional(),
@@ -42,6 +43,13 @@ const Request = z.object({
   path: z.string().max(2000).optional(),
   limit: z.number().int().min(1).max(100).optional(),
   confirm: z.boolean().optional(),
+  tool: z.string().max(40).optional(),
+  since: z.string().max(40).optional(),
+  skip: z.number().int().min(0).max(100000).optional(),
+  all: z.boolean().optional(),
+  name: z.string().max(200).optional(),
+  checkout: z.boolean().optional(),
+  before: z.boolean().optional(),
 }).strict();
 /** Persistent per-repository opt-in (key = canonical repository root). */
 const RepoRecord = z.object({
@@ -282,6 +290,15 @@ export function apply(ctx, rawConfig) {
     }
     if (!repo.cwd) return repo.status;
     if (args.action === 'log') return git.log(repo.cwd, { limit: args.limit || 30, sessionId: agent.id });
+    const meta = { tool: TOOL_NAME, sessionId: agent.id, model: agent.session?.requestHeader?.()?.config?.model };
+    if (args.action === 'history' || args.action === 'branches') return runGitAction(git, repo.cwd, args, meta);
+    if (args.action === 'branch' || args.action === 'switch' || args.action === 'restore') {
+      if (args.confirm !== true) throw new Error(`${args.action} requires confirm:true, and only after the user explicitly asked for it`);
+      if (othersRunning(agent.id, repo.key)) throw new Error('other_agent_active: another agent is editing this repository');
+      const result = await runGitAction(git, repo.cwd, args, meta);
+      s.baseline = null; // HEAD or the work tree moved; the next step re-baselines
+      return record(agent.id, { ...result, action: args.action });
+    }
     if (args.action === 'diff') return git.diff(repo.cwd, { commit: args.sha, maxChars: 16000 });
     if (args.action === 'open') return openTortoiseGit({ executable: await executable(), cwd: repo.cwd, command: args.command || 'log', sha: args.sha, file: args.path, sessionId: agent.id });
     if (args.action === 'undo') {
@@ -298,17 +315,10 @@ export function apply(ctx, rawConfig) {
   // ---- Agent tool -------------------------------------------------------
   ctx.effect(() => ctx.tools.register({
     name: 'tgit_ai',
-    description: 'TortoiseGit AI history for this session. Every turn that edits files in an allowed repository is committed automatically when the turn ends (current branch, AI-written Chinese summary, AI-Session/AI-Turn trailers) — never commit those changes yourself. Actions: status | log {limit} | diff {sha} (bounded text diff) | open {command: log|showcompare|repostatus|diff|blame|revisiongraph, sha?, path?} opens a native TortoiseGit window for the user | pause / resume auto-commit | undo {sha, confirm:true} creates a git revert of one of this session\'s AI commits — only when the user explicitly asks.',
+    description: TOOL_DESCRIPTION,
     parameters: {
       type: 'object', additionalProperties: false, required: ['action'],
-      properties: {
-        action: { type: 'string', enum: ['status', 'log', 'diff', 'open', 'pause', 'resume', 'undo'] },
-        command: { type: 'string', enum: ['log', 'showcompare', 'repostatus', 'diff', 'blame', 'revisiongraph'], description: 'Dialog for action=open.' },
-        sha: { type: 'string', description: 'Commit hash (7-64 hex).' },
-        path: { type: 'string', description: 'Repository-relative file for open diff/blame.' },
-        limit: { type: 'integer', minimum: 1, maximum: 100 },
-        confirm: { type: 'boolean', description: 'Must be true for undo, after the user asked.' },
-      },
+      properties: TOOL_PROPERTIES,
     },
     output: { schema: { type: 'string' }, render: (_args, value) => [{ type: 'text', text: value }] },
     async execute(args, exec) {
