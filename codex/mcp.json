@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "tortoisegit-ai": {
+      "command": "node",
+      "args": ["${CODEX_PLUGIN_ROOT}/codex/mcp.js"],
+      "env": { "CODEX_PROJECT_DIR": "${CODEX_PROJECT_DIR}" }
+    }
+  }
+}

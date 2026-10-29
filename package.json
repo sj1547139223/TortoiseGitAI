@@ -19,6 +19,7 @@
     "icon.svg",
     "README.md",
     "droid",
+    "codex",
     "hooks",
     "mcp.json",
     ".factory-plugin",
@@ -26,7 +27,7 @@
   ],
   "scripts": {
     "test": "node --test tests/*.test.js",
-    "check": "node --check index.js && node --check client.js && node --check droid/hook.js && node --check droid/mcp.js && node --check droid/cli.js"
+    "check": "node --check index.js && node --check client.js && node --check droid/hook.js && node --check droid/mcp.js && node --check droid/cli.js && node --check codex/hook.js && node --check codex/mcp.js && node --check codex/cli.js && node --check codex/summary.js"
   },
   "dependencies": {
     "zod": "^4.0.0"

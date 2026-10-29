@@ -1,0 +1,13 @@
+{
+  "name": "tortoisegit-ai-codex",
+  "description": "Codex 自动提交与 TortoiseGit 历史工具接入",
+  "version": "0.1.0",
+  "entrypoints": {
+    "mcp": "./mcp.js",
+    "hooks": "./hooks.json",
+    "start": "./hook.js start",
+    "stop": "./hook.js stop",
+    "end": "./hook.js end",
+    "cli": "./cli.js"
+  }
+}

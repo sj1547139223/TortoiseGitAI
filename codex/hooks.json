@@ -1,0 +1,5 @@
+{
+  "UserPromptSubmit": [{ "hooks": [{ "type": "command", "command": "node \"${CODEX_PLUGIN_ROOT}/codex/hook.js\" start", "timeout": 30 }] }],
+  "Stop": [{ "hooks": [{ "type": "command", "command": "node \"${CODEX_PLUGIN_ROOT}/codex/hook.js\" stop", "timeout": 90 }] }],
+  "SessionEnd": [{ "hooks": [{ "type": "command", "command": "node \"${CODEX_PLUGIN_ROOT}/codex/hook.js\" end", "timeout": 10 }] }]
+}
